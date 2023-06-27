@@ -1,42 +1,20 @@
-# Advanced Sample Hardhat Project
+# Templar Money Contracts
 
-This project demonstrates an advanced Hardhat use case, integrating other tools commonly used alongside Hardhat in the ecosystem.
+™️ Finest interest-bearing stablecoin that automatically earns APY yields just by holding it in your wallet
 
-The project comes with a sample contract, a test for that contract, a sample script that deploys that contract, and an example of a task implementation, which simply lists the available accounts. It also comes with a variety of other tools, preconfigured to work with the project code.
+##  ⚙️ Local Development
 
-Try running some of the following tasks:
+Local Setup Steps:
+1. git clone https://github.com/Crown-Labs/templar-money-contracts.git
+1. Install dependencies: `yarn install` 
+1. Compile Solidity: `yarn compile`
 
-```shell
-npx hardhat accounts
-npx hardhat compile
-npx hardhat clean
-npx hardhat test
-npx hardhat node
-npx hardhat help
-REPORT_GAS=true npx hardhat test
-npx hardhat coverage
-npx hardhat run scripts/deploy.js
-node scripts/deploy.js
-npx eslint '**/*.js'
-npx eslint '**/*.js' --fix
-npx prettier '**/*.{json,sol,md}' --check
-npx prettier '**/*.{json,sol,md}' --write
-npx solhint 'contracts/**/*.sol'
-npx solhint 'contracts/**/*.sol' --fix
-```
+## 🟡 BSC Mainnet Contracts
 
-# Etherscan verification
-
-To try out Etherscan verification, you first need to deploy a contract to an Ethereum network that's supported by Etherscan, such as Ropsten.
-
-In this project, copy the .env.example file to a file named .env, and then edit it to fill in the details. Enter your Etherscan API key, your Ropsten node URL (eg from Alchemy), and the private key of the account which will send the deployment transaction. With a valid .env file in place, first deploy your contract:
-
-```shell
-hardhat run --network ropsten scripts/deploy.js
-```
-
-Then, copy the deployment address and paste it in to replace `DEPLOYED_CONTRACT_ADDRESS` in this command:
-
-```shell
-npx hardhat verify --network ropsten DEPLOYED_CONTRACT_ADDRESS "Hello, Hardhat!"
-```
+|Contract       | Addresss                                                                                                            | Notes   |
+|:-------------:|:-------------------------------------------------------------------------------------------------------------------:|-------|
+|TM            |[0x194d1D62d8d798Fcc81A6435e6d13adF8bcC2966](https://bscscan.com/address/0x194d1D62d8d798Fcc81A6435e6d13adF8bcC2966)| Templay Money Token Contract|
+|Treasury           |[0xCa5eeab1A111cFD29Cd5717F16216769CbD463E8](https://bscscan.com/address/0xCa5eeab1A111cFD29Cd5717F16216769CbD463E8)| Treasury Contract is responsible for managing the minting and redemption of TM|
+|ReserveFund       |[0xEbe9da74D7d5dc5203776264E7610aE76D7c9f93](https://bscscan.com/address/0xEbe9da74D7d5dc5203776264E7610aE76D7c9f93)| Contract to store a partial reserve, allowing users to redeem their funds |
+|ManagerFund |[0x8049fFeaBD65d043895de3c70634F328B294B6fA](https://bscscan.com/address/0x8049fFeaBD65d043895de3c70634F328B294B6fA)| Handle the rebalancing between the Reserve Fund and Vault
+|TemplarRouter  |[0xc0F1433F39c90393E1b40eE4A58Dee7a23c6385c](https://bscscan.com/address/0xc0F1433F39c90393E1b40eE4A58Dee7a23c6385c)| Enable routing for seamless swapping between stablecoin assets to facilitate the process of minting and redeeming TM |
