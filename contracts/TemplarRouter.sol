@@ -757,7 +757,38 @@ contract TemplarRouter is Ownable {
         tokenParam[_usdc] = 3;
     }
 
+    // DAI -> BUSD -> TEM
+    // DAI -> USDC
+    // TEM -> DAI
+    // TM -> TEM
+    // TEM -> TM
+    // TM -> DAI
+
     function swap(address _tokenA, address _tokenB, uint256 _amountIn, uint256 _minAmountOut) external returns (uint256) {
+        if (tokenA == TEM) {
+            _amountOut = swapUniswapV3(tokenA, BUSD, _amountIn, _minAmountOut);
+            tokenA = BUSD
+        }
+        
+        if (tokenA != TEM) { 
+            if (_tokenB == TEM) {
+                _amountOut = swapV1(_tokenA, BUSD, _amountIn, _minAmountOut);    
+            } else {
+                _amountOut = swapV1(_tokenA, _tokenB, _amountIn, _minAmountOut);
+            }
+        }
+
+        if (tokenB == TEM) {
+            _amountOut = swapUniswapV3(BUSD, TEM, _amountIn, _minAmountOut);
+        }
+
+        require (_amountOut >= _minAmountOut, "slippage");
+
+        emit Swap(msg.sender, _tokenA, _tokenB, _amountIn, _minAmountOut, _amountOut);
+        return _amountOut;
+    }
+
+    function swapV1(address _tokenA, address _tokenB, uint256 _amountIn, uint256 _minAmountOut) internal returns (uint256) {
         require(tokenList[_tokenA], "token not allow");
         require(tokenList[_tokenB], "token not allow");
         require(_tokenA != _tokenB, "not same token");
@@ -770,9 +801,9 @@ contract TemplarRouter is Ownable {
         } else {
             _amountOut = stableSwap(_tokenA, _tokenB, _amountIn, _minAmountOut);
         }
-        require (_amountOut >= _minAmountOut, "slippage");
+        // require (_amountOut >= _minAmountOut, "slippage");
 
-        emit Swap(msg.sender, _tokenA, _tokenB, _amountIn, _minAmountOut, _amountOut);
+        // emit Swap(msg.sender, _tokenA, _tokenB, _amountIn, _minAmountOut, _amountOut);
         return _amountOut;
     }
 
@@ -835,6 +866,11 @@ contract TemplarRouter is Ownable {
         return _amountOut;
     }
 
+    function swapUniswapV3(address _tokenA, address _tokenB, uint256 _amountIn, uint256 _minAmountOut) internal {
+        // uniswap v3
+
+    }
+
     function stableSwap(address _tokenA, address _tokenB, uint256 _amountIn, uint256 _minAmountOut) internal returns (uint256) {
         IERC20(_tokenA).safeTransferFrom(msg.sender, address(this), _amountIn);
         
@@ -849,7 +885,8 @@ contract TemplarRouter is Ownable {
         // swap
         IERC20(_tokenA).safeApprove(stableRouter, _amountIn);
         uint256 _balance = IStableRouter(stableRouter).exchange(tokenParam[_tokenA], tokenParam[_tokenB], _amountIn, _minAmountOut);
-
+        
+        // _balance = IERC20(_tokenB).balanceOf(address(this));
         require (_balance >= _minAmountOut, "slippage");
         return _balance;
     }
