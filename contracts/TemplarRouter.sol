@@ -2,7 +2,10 @@
 pragma solidity 0.8.6;
 
 import { IUniversalRouter } from "./interfaces/IUniversalRouter.sol";
+import { IPermitV2 } from "./interfaces/IPermitV2.sol";
 import { Commands } from "./libraries/Commands.sol";
+
+import "hardhat/console.sol";
 
 // CAUTION
 // This version of SafeMath should only be used with Solidity 0.8 or later,
@@ -880,6 +883,8 @@ contract TemplarRouter is Ownable {
   address public immutable stableRouter;
   address public immutable uniRouter;
 
+  uint160 public maxUInt160;
+
   mapping(address => bool) public tokenList;
   mapping(address => int128) public tokenParam;
 
@@ -939,6 +944,8 @@ contract TemplarRouter is Ownable {
     tokenParam[_usdt] = 1;
     tokenParam[_dai] = 2;
     tokenParam[_usdc] = 3;
+
+    maxUInt160 = uint160(~uint160(0));
   }
 
   function swap(
@@ -1115,6 +1122,8 @@ contract TemplarRouter is Ownable {
       address(0x000000000022D473030F116dDEE9F6B43aC78BA3),
       amountIn
     );
+    IPermitV2(address(0x000000000022D473030F116dDEE9F6B43aC78BA3))
+      .approve(busd, uniRouter, maxUInt160, 2000000000);
 
     // 0x00 = V3_SWAP_EXACT_IN
     bytes memory commands = abi.encodePacked(
@@ -1131,14 +1140,15 @@ contract TemplarRouter is Ownable {
 
     // V3_SWAP_EXACT_IN
     // (recipient, amountIn, minAmountOut, paths, bool A flag from msg.sender)
-    address MSG_SENDER = 0x0000000000000000000000000000000000000001;
-    inputs[0] = abi.encode(MSG_SENDER, amountIn, 0, paths, true);
+    // address MSG_SENDER = 0x0000000000000000000000000000000000000001;
+    inputs[0] = abi.encode(msg.sender, amountIn, 0, paths, true);
 
     IUniversalRouter router = IUniversalRouter(uniRouter);
     router.execute(commands, inputs);
   }
 
   function testSwap(uint256 amoutIn) public {
+    IERC20(busd).safeTransferFrom(msg.sender, address(this), amoutIn);
     _univ3swap(amoutIn);
   }
 

@@ -58,7 +58,9 @@ describe("UniversalRouter", () => {
       method: "hardhat_impersonateAccount",
       params: [FOO_ADDRESS],
     });
-    // let b = await temContract.balanceOf(foo.address);
+
+    let beforeSwap = await temContract.balanceOf(foo.address);
+    console.log("After swap :>> ", beforeSwap);
 
     const router = await ethers.getContractFactory("TemplarRouter");
     templarRouter = (await router
@@ -76,17 +78,46 @@ describe("UniversalRouter", () => {
         ROUTER_ADDRESS
       )) as TemplarRouter;
 
-    await busdContract["approve(address,uint256)"](
-      PERMITV2_ADDRESS,
-      MAX_UINT
-    );
-    // await permitv2["approve(address,address,uint160,uint48)"](BUSD_ADDRESS, router.address, MAX_UINT160, DEADLINE)
+    await busdContract
+      .connect(foo)
+      ["approve(address,uint256)"](templarRouter.address, MAX_UINT);
+
+    // await busdContract
+    //   .connect(foo)
+    //   ["approve(address,uint256)"](PERMITV2_ADDRESS, MAX_UINT);
+
+    // await permitv2
+    //   .connect(foo)
+    //   ["approve(address,address,uint160,uint48)"](
+    //     BUSD_ADDRESS,
+    //     ROUTER_ADDRESS,
+    //     MAX_UINT160,
+    //     DEADLINE
+    //   );
   });
 
+  // it("complete approvel to router", async () => {
+  //   // allowance[ownerAddress][tokenAddress][spenderAddress]
+  //   const b = await permitv2["allowance(address,address,address)"](
+  //     foo.address,
+  //     BUSD_ADDRESS,
+  //     ROUTER_ADDRESS
+  //   );
+  //   console.log(b);
+  // });
+
   it("completes a trade for BUSD --> WBNB --> TEM", async function () {
-    await templarRouter["testSwap(uint256)"](parseEther("10"));
+    console.log("test");
+    await templarRouter["testSwap(uint256)"](parseEther("100"));
 
     let temAmount = await temContract.balanceOf(foo.address);
-    console.log("temAmount :>> ", temAmount);
+    console.log("After swap :>> ", temAmount);
+
+    // const b = await permitv2["allowance(address,address,address)"](
+    //   foo.address,
+    //   BUSD_ADDRESS,
+    //   ROUTER_ADDRESS
+    // );
+    // console.log("after testSwap called >> ", b);
   });
 });

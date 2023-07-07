@@ -17,4 +17,17 @@ interface IPermitV2 {
     uint160 amount,
     uint48 expiration
   ) external;
+
+  function allowance(
+    address,
+    address,
+    address
+  )
+    external
+    view
+    returns (
+      uint160,
+      uint48,
+      uint48
+    );
 }
