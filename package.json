@@ -40,5 +40,8 @@
     "dev": "npx hardhat run scripts/migrate.js --network hardhat",
     "dev2": "npx hardhat run scripts/router.js --network hardhat",
     "deploy": "npx hardhat run scripts/deploy.js"
+  },
+  "dependencies": {
+    "@uniswap/v3-periphery": "^1.4.3"
   }
 }

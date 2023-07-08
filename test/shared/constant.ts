@@ -1,5 +1,8 @@
 export const MAX_UINT =
   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+export const MAX_UINT160 =
+  "0xffffffffffffffffffffffffffffffffffffffff";
+export const DEADLINE = 2000000000;
 
 export const FOO_ADDRESS: string =
   "0x4a620b1C6Eb9998c27F901C849BDB4F86dDef55C";

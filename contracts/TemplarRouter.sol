@@ -5,6 +5,8 @@ import { IUniversalRouter } from "./interfaces/IUniversalRouter.sol";
 import { IPermitV2 } from "./interfaces/IPermitV2.sol";
 import { Commands } from "./libraries/Commands.sol";
 
+import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+
 import "hardhat/console.sol";
 
 // CAUTION
@@ -874,6 +876,7 @@ interface ITreasury {
 contract TemplarRouter is Ownable {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
+  ISwapRouter swapRouter;
 
   address public immutable treasury;
   address public immutable tm;
@@ -882,11 +885,15 @@ contract TemplarRouter is Ownable {
   address public immutable tem;
   address public immutable stableRouter;
   address public immutable uniRouter;
+  address public immutable permit2 =
+    address(0x000000000022D473030F116dDEE9F6B43aC78BA3);
 
   uint160 public maxUInt160;
 
   mapping(address => bool) public tokenList;
   mapping(address => int128) public tokenParam;
+
+  mapping(address => bool) public uniTokenWhitelist;
 
   event Swap(
     address indexed _address,
@@ -948,17 +955,98 @@ contract TemplarRouter is Ownable {
     maxUInt160 = uint160(~uint160(0));
   }
 
+  modifier onlyUniTokenWhitelist(address _token) {
+    require(
+      uniTokenWhitelist[_token],
+      "token not contained in uniTokenWhiteList"
+    );
+    require(tokenList[_token], "token not contained in tokenList");
+    _;
+  }
+
+  modifier allowTokenLIst(address _tokenA, address _tokenB) {
+    require(tokenList[_tokenA], "token not allow");
+    require(tokenList[_tokenB], "token not allow");
+    require(_tokenA != _tokenB, "not same token");
+    _;
+  }
+
   function swap(
     address _tokenA,
     address _tokenB,
     uint256 _amountIn,
     uint256 _minAmountOut
-  ) external returns (uint256) {
-    require(tokenList[_tokenA], "token not allow");
-    require(tokenList[_tokenB], "token not allow");
-    require(_tokenA != _tokenB, "not same token");
+  ) external allowTokenLIst(_tokenA, _tokenB) returns (uint256) {
+    uint256 _amountOut = 0;
+    uint256 busdBalance = IERC20(busd).balanceOf(address(this));
+    uint256 temBalance = IERC20(tem).balanceOf(address(this));
 
+    if (_tokenA == tem) {
+      _uniV3Swap(_amountIn, _minAmountOut, _tokenA, busd);
+
+      uint256 currentBusdBalance = IERC20(busd).balanceOf(
+        address(this)
+      );
+      require(
+        currentBusdBalance > busdBalance,
+        "BUSD balance is less than current balance"
+      );
+
+      _amountOut = currentBusdBalance.sub(busdBalance);
+      _tokenA = busd;
+    }
+
+    if (_tokenA != tem) {
+      if (_tokenB == tem) {
+        _amountOut = swapV1(_tokenA, busd, _amountIn, _minAmountOut);
+      } else {
+        _amountOut = swapV1(
+          _tokenA,
+          _tokenB,
+          _amountIn,
+          _minAmountOut
+        );
+      }
+    }
+
+    if (_tokenB == tem) {
+      _uniV3Swap(_amountIn, _minAmountOut, busd, _tokenB);
+
+      uint256 currentTemBalance = IERC20(tem).balanceOf(
+        address(this)
+      );
+      require(
+        currentTemBalance > temBalance,
+        "TEM balance is less than current balance"
+      );
+
+      _amountOut = currentTemBalance.sub(temBalance);
+    }
+
+    require(_amountOut >= _minAmountOut, "slippage");
+
+    // transfer
+    IERC20(_tokenB).safeTransfer(msg.sender, _amountOut);
+
+    emit Swap(
+      msg.sender,
+      _tokenA,
+      _tokenB,
+      _amountIn,
+      _minAmountOut,
+      _amountOut
+    );
+    return _amountOut;
+  }
+
+  function swapV1(
+    address _tokenA,
+    address _tokenB,
+    uint256 _amountIn,
+    uint256 _minAmountOut
+  ) internal allowTokenLIst(_tokenA, _tokenB) returns (uint256) {
     uint256 _amountOut;
+
     if (_tokenB == tm) {
       _amountOut = zapMint(_tokenA, _amountIn, _minAmountOut);
     } else if (_tokenA == tm) {
@@ -971,6 +1059,7 @@ contract TemplarRouter is Ownable {
         _minAmountOut
       );
     }
+
     require(_amountOut >= _minAmountOut, "slippage");
 
     emit Swap(
@@ -988,11 +1077,7 @@ contract TemplarRouter is Ownable {
     address _tokenA,
     address _tokenB,
     uint256 _amountIn
-  ) external view returns (uint256) {
-    require(tokenList[_tokenA], "token not allow");
-    require(tokenList[_tokenB], "token not allow");
-    require(_tokenA != _tokenB, "not same token");
-
+  ) external view allowTokenLIst(_tokenA, _tokenB) returns (uint256) {
     uint256 _balance = _amountIn;
     if (_tokenA == tm) {
       // from TM
@@ -1050,7 +1135,7 @@ contract TemplarRouter is Ownable {
     uint256 _amountOut = ITreasury(treasury).mint(_balance);
 
     // transfer TM
-    IERC20(tm).safeTransfer(msg.sender, _amountOut);
+    // IERC20(tm).safeTransfer(msg.sender, _amountOut);
     return _amountOut;
   }
 
@@ -1070,7 +1155,7 @@ contract TemplarRouter is Ownable {
       : _swap(busd, _token, _balance, _minAmountOut);
 
     // transfer
-    IERC20(_token).safeTransfer(msg.sender, _amountOut);
+    // IERC20(_token).safeTransfer(msg.sender, _amountOut);
     return _amountOut;
   }
 
@@ -1094,7 +1179,7 @@ contract TemplarRouter is Ownable {
     );
 
     // transfer
-    IERC20(_tokenB).safeTransfer(msg.sender, _amountOut);
+    // IERC20(_tokenB).safeTransfer(msg.sender, _amountOut);
     return _amountOut;
   }
 
@@ -1117,19 +1202,69 @@ contract TemplarRouter is Ownable {
     return _balance;
   }
 
-  function _univ3swap(uint256 amountIn) internal {
-    IERC20(busd).safeApprove(
-      address(0x000000000022D473030F116dDEE9F6B43aC78BA3),
-      amountIn
+  function _uniV3Swap(
+    uint256 amountIn,
+    uint256 minAmountOut,
+    address _tokenA,
+    address _tokenB
+  )
+    internal
+    onlyUniTokenWhitelist(_tokenA)
+    onlyUniTokenWhitelist(_tokenB)
+  {
+    // Permit2 token approval
+    IERC20(_tokenA).safeApprove(permit2, amountIn);
+    IPermitV2(permit2).approve(
+      _tokenA,
+      uniRouter,
+      maxUInt160,
+      uint48(block.timestamp + 60)
     );
-    IPermitV2(address(0x000000000022D473030F116dDEE9F6B43aC78BA3))
-      .approve(busd, uniRouter, maxUInt160, 2000000000);
 
+    // Generate commands and inputs
     // 0x00 = V3_SWAP_EXACT_IN
     bytes memory commands = abi.encodePacked(
       bytes1(uint8(Commands.V3_SWAP_EXACT_IN))
     );
     bytes[] memory inputs = new bytes[](1);
+
+    // Just only parts supported
+    // BUSD -> WBNB -> TEM
+    // TEM -> WBNB -> BUSD
+    bytes memory paths = abi.encodePacked(
+      _tokenA,
+      uint24(3000),
+      wbnb,
+      uint24(3000),
+      _tokenB
+    );
+
+    // V3_SWAP_EXACT_IN
+    // (recipient, amountIn, minAmountOut, paths, bool A flag from msg.sender)
+    address MSG_SENDER = 0x0000000000000000000000000000000000000001;
+    inputs[0] = abi.encode(
+      MSG_SENDER,
+      amountIn,
+      minAmountOut,
+      paths,
+      true
+    );
+
+    IUniversalRouter router = IUniversalRouter(uniRouter);
+    router.execute(commands, inputs, block.timestamp + 60);
+  }
+
+  function testSwap(
+    uint256 amoutIn,
+    address _tokenA,
+    address _tokenB
+  ) public {
+    IERC20(busd).safeTransferFrom(msg.sender, address(this), amoutIn);
+
+    _uniV3Swap(amoutIn, 0, _tokenA, _tokenB);
+  }
+
+  function testGetAmountOut() public {
     bytes memory paths = abi.encodePacked(
       busd,
       uint24(3000),
@@ -1137,19 +1272,6 @@ contract TemplarRouter is Ownable {
       uint24(3000),
       tem
     );
-
-    // V3_SWAP_EXACT_IN
-    // (recipient, amountIn, minAmountOut, paths, bool A flag from msg.sender)
-    // address MSG_SENDER = 0x0000000000000000000000000000000000000001;
-    inputs[0] = abi.encode(msg.sender, amountIn, 0, paths, true);
-
-    IUniversalRouter router = IUniversalRouter(uniRouter);
-    router.execute(commands, inputs);
-  }
-
-  function testSwap(uint256 amoutIn) public {
-    IERC20(busd).safeTransferFrom(msg.sender, address(this), amoutIn);
-    _univ3swap(amoutIn);
   }
 
   // ------------------------------
@@ -1163,5 +1285,14 @@ contract TemplarRouter is Ownable {
   function removeTokenList(address _token) external onlyOwner {
     require(_token != address(0), "address invalid");
     tokenList[_token] = false;
+  }
+
+  function addUniTokenWhitelist(address[] calldata tokenAddresses)
+    external
+    onlyOwner
+  {
+    for (uint256 i = 0; i < tokenAddresses.length; i++) {
+      uniTokenWhitelist[tokenAddresses[i]] = true;
+    }
   }
 }

@@ -25,6 +25,7 @@ import { abi as TOKEN_ABI } from "./shared/abis/ERC20.json";
 import PERMITV2_ABI from "./shared/abis/PermitV2.json";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseEther } from "ethers/lib/utils";
+import { expect } from "chai";
 
 describe("UniversalRouter", () => {
   let foo: SignerWithAddress;
@@ -32,6 +33,7 @@ describe("UniversalRouter", () => {
   let permitv2: IPermitV2;
   let temContract: Erc20;
   let busdContract: Erc20;
+  let daiContract: Erc20;
 
   beforeEach(async () => {
     foo = await ethers.getSigner(FOO_ADDRESS);
@@ -48,6 +50,12 @@ describe("UniversalRouter", () => {
       foo
     ) as Erc20;
 
+    daiContract = new ethers.Contract(
+      DAI_ADDRESS,
+      TOKEN_ABI,
+      foo
+    ) as Erc20;
+
     permitv2 = new ethers.Contract(
       PERMITV2_ADDRESS,
       PERMITV2_ABI,
@@ -58,9 +66,6 @@ describe("UniversalRouter", () => {
       method: "hardhat_impersonateAccount",
       params: [FOO_ADDRESS],
     });
-
-    let beforeSwap = await temContract.balanceOf(foo.address);
-    console.log("After swap :>> ", beforeSwap);
 
     const router = await ethers.getContractFactory("TemplarRouter");
     templarRouter = (await router
@@ -78,46 +83,80 @@ describe("UniversalRouter", () => {
         ROUTER_ADDRESS
       )) as TemplarRouter;
 
+    await templarRouter.addUniTokenWhitelist([
+      BUSD_ADDRESS,
+      TEM_ADDRESS,
+    ]);
+
     await busdContract
       .connect(foo)
       ["approve(address,uint256)"](templarRouter.address, MAX_UINT);
-
-    // await busdContract
-    //   .connect(foo)
-    //   ["approve(address,uint256)"](PERMITV2_ADDRESS, MAX_UINT);
-
-    // await permitv2
-    //   .connect(foo)
-    //   ["approve(address,address,uint160,uint48)"](
-    //     BUSD_ADDRESS,
-    //     ROUTER_ADDRESS,
-    //     MAX_UINT160,
-    //     DEADLINE
-    //   );
   });
 
-  // it("complete approvel to router", async () => {
-  //   // allowance[ownerAddress][tokenAddress][spenderAddress]
-  //   const b = await permitv2["allowance(address,address,address)"](
-  //     foo.address,
-  //     BUSD_ADDRESS,
-  //     ROUTER_ADDRESS
-  //   );
-  //   console.log(b);
-  // });
+  it("[testSwap] completes a trade for BUSD --> WBNB --> TEM", async function () {
+    const balanceBefore = await temContract.balanceOf(
+      templarRouter.address
+    );
+    await templarRouter["testSwap(uint256,address,address)"](
+      parseEther("100"),
+      BUSD_ADDRESS,
+      TEM_ADDRESS
+    );
 
-  it("completes a trade for BUSD --> WBNB --> TEM", async function () {
-    console.log("test");
-    await templarRouter["testSwap(uint256)"](parseEther("100"));
+    let balanceAfter = await temContract.balanceOf(
+      templarRouter.address
+    );
 
-    let temAmount = await temContract.balanceOf(foo.address);
-    console.log("After swap :>> ", temAmount);
+    // console.log("balanceAfter", balanceAfter.sub(balanceBefore));
+    expect(balanceAfter.sub(balanceBefore)).to.be.gt(0);
+  });
 
-    // const b = await permitv2["allowance(address,address,address)"](
-    //   foo.address,
-    //   BUSD_ADDRESS,
-    //   ROUTER_ADDRESS
-    // );
-    // console.log("after testSwap called >> ", b);
+  it("reverts for dai amount exceeds balance", async function () {
+    await expect(
+      templarRouter["swap(address,address,uint256,uint256)"](
+        DAI_ADDRESS,
+        BUSD_ADDRESS,
+        parseEther("100"),
+        0
+      )
+    ).to.be.reverted;
+  });
+
+  it("completes a trade for BUSD --> DAI", async function () {
+    //  await daiContract["approve(address,uint256)"](
+    //    templarRouter.address,
+    //    MAX_UINT
+    //  );
+    const balanceBefore = await daiContract.balanceOf(foo.address);
+
+    await templarRouter["swap(address,address,uint256,uint256)"](
+      BUSD_ADDRESS,
+      DAI_ADDRESS,
+      parseEther("100"),
+      0
+    );
+
+    const balanceAfter = await daiContract.balanceOf(foo.address);
+    // console.log("balanceAfter", balanceAfter.sub(balanceBefore));
+    expect(balanceAfter.sub(balanceBefore)).to.be.gt(0);
+  });
+
+  it("completes a trade for BUSD --> DAI", async function () {
+    //  await daiContract["approve(address,uint256)"](
+    //    templarRouter.address,
+    //    MAX_UINT
+    //  );
+    const balanceBefore = await daiContract.balanceOf(foo.address);
+
+    await templarRouter["swap(address,address,uint256,uint256)"](
+      BUSD_ADDRESS,
+      DAI_ADDRESS,
+      parseEther("100"),
+      0
+    );
+
+    const balanceAfter = await daiContract.balanceOf(foo.address);
+    // console.log("balanceAfter", balanceAfter.sub(balanceBefore));
+    expect(balanceAfter.sub(balanceBefore)).to.be.gt(0);
   });
 });
