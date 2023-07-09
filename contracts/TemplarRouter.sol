@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.6;
+import "hardhat/console.sol";
 
 import { IUniversalRouter } from "./interfaces/IUniversalRouter.sol";
 import { IPermitV2 } from "./interfaces/IPermitV2.sol";
@@ -964,7 +965,7 @@ contract TemplarRouter is Ownable {
     _;
   }
 
-  modifier allowTokenLIst(address _tokenA, address _tokenB) {
+  modifier allowTokenList(address _tokenA, address _tokenB) {
     require(tokenList[_tokenA], "token not allow");
     require(tokenList[_tokenB], "token not allow");
     require(_tokenA != _tokenB, "not same token");
@@ -976,51 +977,87 @@ contract TemplarRouter is Ownable {
     address _tokenB,
     uint256 _amountIn,
     uint256 _minAmountOut
-  ) external allowTokenLIst(_tokenA, _tokenB) returns (uint256) {
+  ) external allowTokenList(_tokenA, _tokenB) returns (uint256) {
+    IERC20(_tokenA).safeTransferFrom(
+      msg.sender,
+      address(this),
+      _amountIn
+    );
+
     uint256 _amountOut = 0;
     uint256 busdBalance = IERC20(busd).balanceOf(address(this));
     uint256 temBalance = IERC20(tem).balanceOf(address(this));
 
-    if (_tokenA == tem) {
-      _uniV3Swap(_amountIn, _minAmountOut, _tokenA, busd);
+    // only TEM > BUSD || BUSD > TEM
+    if (
+      (_tokenA == tem && _tokenB == busd) ||
+      (_tokenA == busd && _tokenB == tem)
+    ) {
+      _uniV3Swap(_amountIn, _minAmountOut, _tokenA, _tokenB);
 
-      uint256 currentBusdBalance = IERC20(busd).balanceOf(
-        address(this)
-      );
-      require(
-        currentBusdBalance > busdBalance,
-        "BUSD balance is less than current balance"
-      );
-
-      _amountOut = currentBusdBalance.sub(busdBalance);
-      _tokenA = busd;
-    }
-
-    if (_tokenA != tem) {
-      if (_tokenB == tem) {
-        _amountOut = swapV1(_tokenA, busd, _amountIn, _minAmountOut);
-      } else {
-        _amountOut = swapV1(
-          _tokenA,
-          _tokenB,
-          _amountIn,
-          _minAmountOut
+      if (_tokenA == tem) {
+        uint256 currentBusdBalance = IERC20(busd).balanceOf(
+          address(this)
         );
+
+        _amountOut = currentBusdBalance.sub(busdBalance);
+      } else {
+        uint256 currentTemBalance = IERC20(tem).balanceOf(
+          address(this)
+        );
+        _amountOut = currentTemBalance.sub(busdBalance);
       }
-    }
+    } else {
+      if (_tokenA == tem) {
+        _uniV3Swap(_amountIn, _minAmountOut, _tokenA, busd);
 
-    if (_tokenB == tem) {
-      _uniV3Swap(_amountIn, _minAmountOut, busd, _tokenB);
+        uint256 currentBusdBalance = IERC20(busd).balanceOf(
+          address(this)
+        );
 
-      uint256 currentTemBalance = IERC20(tem).balanceOf(
-        address(this)
-      );
-      require(
-        currentTemBalance > temBalance,
-        "TEM balance is less than current balance"
-      );
+        _amountOut = currentBusdBalance.sub(busdBalance);
+        _tokenA = busd;
+      }
 
-      _amountOut = currentTemBalance.sub(temBalance);
+      // console.log(
+      //   "Transferring from %s A token %s %s tokens",
+      //   msg.sender,
+      //   _tokenA,
+      //   _amountOut
+      // );
+
+      if (_tokenA != tem) {
+        if (_tokenB == tem) {
+          _amountOut = swapV1(
+            _tokenA,
+            busd,
+            _amountIn,
+            _minAmountOut
+          );
+        } else {
+          _amountOut = swapV1(
+            _tokenA,
+            _tokenB,
+            _amountIn,
+            _minAmountOut
+          );
+        }
+      }
+
+      if (_tokenB == tem) {
+        _uniV3Swap(_amountIn, _minAmountOut, busd, _tokenB);
+
+        uint256 currentTemBalance = IERC20(tem).balanceOf(
+          address(this)
+        );
+
+        require(
+          currentTemBalance > temBalance,
+          "TEM balance is less than current balance"
+        );
+
+        _amountOut = currentTemBalance.sub(temBalance);
+      }
     }
 
     require(_amountOut >= _minAmountOut, "slippage");
@@ -1036,6 +1073,7 @@ contract TemplarRouter is Ownable {
       _minAmountOut,
       _amountOut
     );
+
     return _amountOut;
   }
 
@@ -1044,7 +1082,7 @@ contract TemplarRouter is Ownable {
     address _tokenB,
     uint256 _amountIn,
     uint256 _minAmountOut
-  ) internal allowTokenLIst(_tokenA, _tokenB) returns (uint256) {
+  ) internal returns (uint256) {
     uint256 _amountOut;
 
     if (_tokenB == tm) {
@@ -1060,16 +1098,6 @@ contract TemplarRouter is Ownable {
       );
     }
 
-    require(_amountOut >= _minAmountOut, "slippage");
-
-    emit Swap(
-      msg.sender,
-      _tokenA,
-      _tokenB,
-      _amountIn,
-      _minAmountOut,
-      _amountOut
-    );
     return _amountOut;
   }
 
@@ -1077,7 +1105,7 @@ contract TemplarRouter is Ownable {
     address _tokenA,
     address _tokenB,
     uint256 _amountIn
-  ) external view allowTokenLIst(_tokenA, _tokenB) returns (uint256) {
+  ) external view allowTokenList(_tokenA, _tokenB) returns (uint256) {
     uint256 _balance = _amountIn;
     if (_tokenA == tm) {
       // from TM
@@ -1121,11 +1149,11 @@ contract TemplarRouter is Ownable {
     uint256 _minAmountOut
   ) internal returns (uint256) {
     // swap to BUSD
-    IERC20(_token).safeTransferFrom(
-      msg.sender,
-      address(this),
-      _amountIn
-    );
+    // IERC20(_token).safeTransferFrom(
+    //   msg.sender,
+    //   address(this),
+    //   _amountIn
+    // );
     uint256 _balance = (_token == busd)
       ? _amountIn
       : _swap(_token, busd, _amountIn, _minAmountOut);
@@ -1145,7 +1173,7 @@ contract TemplarRouter is Ownable {
     uint256 _minAmountOut
   ) internal returns (uint256) {
     // redeem to BUSD
-    IERC20(tm).safeTransferFrom(msg.sender, address(this), _amountIn);
+    // IERC20(tm).safeTransferFrom(msg.sender, address(this), _amountIn);
     IERC20(tm).safeApprove(treasury, _amountIn);
     uint256 _balance = ITreasury(treasury).redeem(_amountIn);
 
@@ -1165,11 +1193,11 @@ contract TemplarRouter is Ownable {
     uint256 _amountIn,
     uint256 _minAmountOut
   ) internal returns (uint256) {
-    IERC20(_tokenA).safeTransferFrom(
-      msg.sender,
-      address(this),
-      _amountIn
-    );
+    // IERC20(_tokenA).safeTransferFrom(
+    //   msg.sender,
+    //   address(this),
+    //   _amountIn
+    // );
 
     uint256 _amountOut = _swap(
       _tokenA,
@@ -1259,19 +1287,12 @@ contract TemplarRouter is Ownable {
     address _tokenA,
     address _tokenB
   ) public {
-    IERC20(busd).safeTransferFrom(msg.sender, address(this), amoutIn);
-
-    _uniV3Swap(amoutIn, 0, _tokenA, _tokenB);
-  }
-
-  function testGetAmountOut() public {
-    bytes memory paths = abi.encodePacked(
-      busd,
-      uint24(3000),
-      wbnb,
-      uint24(3000),
-      tem
+    IERC20(_tokenA).safeTransferFrom(
+      msg.sender,
+      address(this),
+      amoutIn
     );
+    _uniV3Swap(amoutIn, 0, _tokenA, _tokenB);
   }
 
   // ------------------------------

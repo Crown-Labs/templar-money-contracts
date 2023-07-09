@@ -6,6 +6,8 @@ export const DEADLINE = 2000000000;
 
 export const FOO_ADDRESS: string =
   "0x4a620b1C6Eb9998c27F901C849BDB4F86dDef55C";
+export const BAR_ADDRESS: string =
+  "0x8e762609cea5ddd3234b9d41cf8d0d8b4f2581a6";
 export const ROUTER_ADDRESS: string =
   "0x5Dc88340E1c5c6366864Ee415d6034cadd1A9897";
 export const TREASURY_ADDRESS: string =
