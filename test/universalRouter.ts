@@ -24,7 +24,6 @@ import {
 import { parseEvents, V3_EVENTS } from "./shared/parseEvents";
 
 import { abi as TOKEN_ABI } from "./shared/abis/ERC20.json";
-import PERMITV2_ABI from "./shared/abis/PermitV2.json";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseEther, parseUnits } from "ethers/lib/utils";
 import { expect } from "chai";

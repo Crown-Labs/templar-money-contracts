@@ -993,7 +993,7 @@ contract TemplarRouter is Ownable {
       (_tokenA == tem && _tokenB == busd) ||
       (_tokenA == busd && _tokenB == tem)
     ) {
-      _uniV3Swap(_amountIn, _minAmountOut, _tokenA, _tokenB);
+      _swapWithUniswapV3(_amountIn, _minAmountOut, _tokenA, _tokenB);
 
       if (_tokenA == tem) {
         uint256 currentBusdBalance = IERC20(busd).balanceOf(
@@ -1009,7 +1009,7 @@ contract TemplarRouter is Ownable {
       }
     } else {
       if (_tokenA == tem) {
-        _uniV3Swap(_amountIn, _minAmountOut, _tokenA, busd);
+        _swapWithUniswapV3(_amountIn, _minAmountOut, _tokenA, busd);
 
         uint256 currentBusdBalance = IERC20(busd).balanceOf(
           address(this)
@@ -1045,7 +1045,8 @@ contract TemplarRouter is Ownable {
       }
 
       if (_tokenB == tem) {
-        _uniV3Swap(_amountIn, _minAmountOut, busd, _tokenB);
+        // BUSD --> TEM
+        _swapWithUniswapV3(_amountIn, _minAmountOut, busd, _tokenB);
 
         uint256 currentTemBalance = IERC20(tem).balanceOf(
           address(this)
@@ -1230,7 +1231,7 @@ contract TemplarRouter is Ownable {
     return _balance;
   }
 
-  function _uniV3Swap(
+  function _swapWithUniswapV3(
     uint256 amountIn,
     uint256 minAmountOut,
     address _tokenA,
@@ -1292,7 +1293,7 @@ contract TemplarRouter is Ownable {
       address(this),
       amoutIn
     );
-    _uniV3Swap(amoutIn, 0, _tokenA, _tokenB);
+    _swapWithUniswapV3(amoutIn, 0, _tokenA, _tokenB);
   }
 
   // ------------------------------
