@@ -5,8 +5,6 @@ import { TransactionReceipt } from "@ethersproject/abstract-provider";
 
 import {
   MAX_UINT,
-  MAX_UINT160,
-  DEADLINE,
   FOO_ADDRESS,
   TEM_ADDRESS,
   ROUTER_ADDRESS,
@@ -18,12 +16,12 @@ import {
   USDT_ADDRESS,
   STABLE_ROUTER_ADDRESS,
   DAI_ADDRESS,
-  PERMITV2_ADDRESS,
   BAR_ADDRESS,
 } from "./shared/constant";
-import { parseEvents, V3_EVENTS } from "./shared/parseEvents";
+import { parseEvents, EVENT } from "./shared/parseEvents";
 
 import { abi as TOKEN_ABI } from "./shared/abis/ERC20.json";
+import QuoterV2 from "./shared/abis/QuoterV2.json";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseEther, parseUnits } from "ethers/lib/utils";
 import { expect } from "chai";
@@ -41,6 +39,7 @@ describe("Templar Router", () => {
   let daiContract: Erc20;
   let usdtContract: Erc20;
   let usdcContract: Erc20;
+  let quoterV2: any;
 
   beforeEach(async () => {
     foo = await ethers.getSigner(FOO_ADDRESS);
@@ -82,6 +81,12 @@ describe("Templar Router", () => {
       foo
     ) as Erc20;
 
+    quoterV2 = new ethers.Contract(
+      "0x78D78E420Da98ad378D7799bE8f4AF69033EB077",
+      QuoterV2,
+      foo
+    ) as Erc20;
+
     await network.provider.request({
       method: "hardhat_impersonateAccount",
       params: [FOO_ADDRESS],
@@ -95,7 +100,7 @@ describe("Templar Router", () => {
     const Treasury = await ethers.getContractFactory("Treasury");
     treasury = Treasury.attach(TREASURY_ADDRESS) as Treasury;
 
-    await treasury.connect(bar).setMintPause(false);
+    // await treasury.connect(bar).setMintPause(false);
 
     const router = await ethers.getContractFactory("TemplarRouter");
     templarRouter = (await router
@@ -128,45 +133,15 @@ describe("Templar Router", () => {
     await usdtContract
       .connect(foo)
       ["approve(address,uint256)"](templarRouter.address, MAX_UINT);
+    await daiContract
+      .connect(foo)
+      ["approve(address,uint256)"](templarRouter.address, MAX_UINT);
+    await tmContract
+      .connect(foo)
+      ["approve(address,uint256)"](templarRouter.address, MAX_UINT);
   });
 
   describe("UniswapV3 swaptoken", () => {
-    it("[testSwap] completes a trade for BUSD --> WBNB --> TEM", async function () {
-      const balanceBefore = await temContract.balanceOf(
-        templarRouter.address
-      );
-      await templarRouter["testSwap(uint256,address,address)"](
-        parseEther("1"),
-        BUSD_ADDRESS,
-        TEM_ADDRESS
-      );
-
-      let balanceAfter = await temContract.balanceOf(
-        templarRouter.address
-      );
-
-      expect(balanceAfter.sub(balanceBefore)).to.be.gt(0);
-    });
-
-    it("[testSwap] completes a trade for TEM --> WBNB --> BUSD", async function () {
-      const balanceBefore = await busdContract.balanceOf(
-        templarRouter.address
-      );
-      await templarRouter["testSwap(uint256,address,address)"](
-        parseUnits("10", 9),
-        TEM_ADDRESS,
-        BUSD_ADDRESS
-      );
-
-      let balanceAfter = await busdContract.balanceOf(
-        templarRouter.address
-      );
-
-      console.log(balanceAfter, balanceBefore);
-
-      expect(balanceAfter.sub(balanceBefore)).to.be.gt(0);
-    });
-
     it("reverts for dai amount exceeds balance", async function () {
       await expect(
         templarRouter["swap(address,address,uint256,uint256)"](
@@ -289,32 +264,56 @@ describe("Templar Router", () => {
       );
     });
 
-    // it("completes a trade for BUSD --> TEM", async function () {
-    //   const amountIn = parseEther("10");
-    //   const amountOutMin = parseUnits("6.9", 9);
+    it("complete get amount out BUSD --> TEM", async () => {
+      const amountIn = parseEther("10");
 
-    //   const {
-    //     busdBalanceAfter,
-    //     busdBalanceBefore,
-    //     temBalanceAfter,
-    //     temBalanceBefore,
-    //   } = await executeRouter(
-    //     BUSD_ADDRESS,
-    //     TEM_ADDRESS,
-    //     amountIn,
-    //     amountOutMin
-    //   );
+      const amountOut = await templarRouter.callStatic.swap(
+        BUSD_ADDRESS,
+        TEM_ADDRESS,
+        amountIn,
+        0
+      );
 
-    //   expect(busdBalanceBefore.sub(amountIn)).to.eq(busdBalanceAfter);
-    //   expect(temBalanceAfter.sub(temBalanceBefore)).to.be.gte(
-    //     amountOutMin
-    //   );
-    // });
+      const { temBalanceAfter, temBalanceBefore } =
+        await executeRouter(
+          BUSD_ADDRESS,
+          TEM_ADDRESS,
+          amountIn,
+          amountOut
+        );
+      expect(amountOut).to.eq(temBalanceAfter.sub(temBalanceBefore));
+    });
+
+    it("complete get amount out TM --> TEM", async () => {
+      const amountIn = parseEther("10");
+
+      const amountOut = await templarRouter.callStatic.swap(
+        TM_ADDRESS,
+        TEM_ADDRESS,
+        amountIn,
+        0
+      );
+
+      const { temBalanceAfter, temBalanceBefore, swapEventArgs } =
+        await executeRouter(
+          TM_ADDRESS,
+          TEM_ADDRESS,
+          amountIn,
+          amountOut
+        );
+
+      const { _amountIn, _amountOut } = swapEventArgs;
+      expect(amountOut).to.eq(temBalanceAfter.sub(temBalanceBefore));
+
+      expect(_amountIn).to.eq(amountIn);
+      expect(_amountOut).to.eq(amountOut);
+    });
   });
 
-  type V3SwapEventArgs = {
-    amount0: BigNumber;
-    amount1: BigNumber;
+  type SwapEventArgs = {
+    _amountIn: BigNumber;
+    _amountOut: BigNumber;
+    _minAmountOut: BigNumber;
   };
 
   type ExecutionParams = {
@@ -332,7 +331,7 @@ describe("Templar Router", () => {
     usdcBalanceAfter: BigNumber;
     usdtBalanceAfter: BigNumber;
     tmBalanceAfter: BigNumber;
-    v3SwapEventArgs: V3SwapEventArgs;
+    swapEventArgs: SwapEventArgs;
     receipt: TransactionReceipt;
     gasSpent: BigNumber;
   };
@@ -375,8 +374,8 @@ describe("Templar Router", () => {
     ).wait();
     const gasSpent = receipt.gasUsed.mul(receipt.effectiveGasPrice);
 
-    const v3SwapEventArgs = parseEvents(V3_EVENTS, receipt)[0]
-      ?.args as unknown as V3SwapEventArgs;
+    const swapEventArgs = parseEvents(EVENT, receipt)[0]
+      ?.args as unknown as SwapEventArgs;
 
     const bnbBalanceAfter: BigNumber =
       await ethers.provider.getBalance(foo.address);
@@ -414,7 +413,7 @@ describe("Templar Router", () => {
       usdcBalanceAfter,
       usdtBalanceAfter,
       tmBalanceAfter,
-      v3SwapEventArgs,
+      swapEventArgs,
       receipt,
       gasSpent,
     };

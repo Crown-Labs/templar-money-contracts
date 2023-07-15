@@ -4,6 +4,7 @@ import "hardhat/console.sol";
 
 import { IUniversalRouter } from "./interfaces/IUniversalRouter.sol";
 import { IPermitV2 } from "./interfaces/IPermitV2.sol";
+import { IQuoterV2 } from "./interfaces/IQuoterV2.sol";
 import { Commands } from "./libraries/Commands.sol";
 
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
@@ -888,6 +889,8 @@ contract TemplarRouter is Ownable {
   address public immutable uniRouter;
   address public immutable permit2 =
     address(0x000000000022D473030F116dDEE9F6B43aC78BA3);
+  address public immutable quoter2 =
+    address(0x78D78E420Da98ad378D7799bE8f4AF69033EB077);
 
   uint160 public maxUInt160;
 
@@ -956,15 +959,6 @@ contract TemplarRouter is Ownable {
     maxUInt160 = uint160(~uint160(0));
   }
 
-  modifier onlyUniTokenWhitelist(address _token) {
-    require(
-      uniTokenWhitelist[_token],
-      "token not contained in uniTokenWhiteList"
-    );
-    require(tokenList[_token], "token not contained in tokenList");
-    _;
-  }
-
   modifier allowTokenList(address _tokenA, address _tokenB) {
     require(tokenList[_tokenA], "token not allow");
     require(tokenList[_tokenB], "token not allow");
@@ -977,65 +971,49 @@ contract TemplarRouter is Ownable {
     address _tokenB,
     uint256 _amountIn,
     uint256 _minAmountOut
-  ) external allowTokenList(_tokenA, _tokenB) returns (uint256) {
+  )
+    external
+    allowTokenList(_tokenA, _tokenB)
+    returns (uint256 _amountOut)
+  {
     IERC20(_tokenA).safeTransferFrom(
       msg.sender,
       address(this),
       _amountIn
     );
 
-    uint256 _amountOut = 0;
-    uint256 busdBalance = IERC20(busd).balanceOf(address(this));
-    uint256 temBalance = IERC20(tem).balanceOf(address(this));
-
-    // only TEM > BUSD || BUSD > TEM
+    // only TEM --> BUSD || BUSD --> TEM
     if (
       (_tokenA == tem && _tokenB == busd) ||
       (_tokenA == busd && _tokenB == tem)
     ) {
-      _swapWithUniswapV3(_amountIn, _minAmountOut, _tokenA, _tokenB);
-
-      if (_tokenA == tem) {
-        uint256 currentBusdBalance = IERC20(busd).balanceOf(
-          address(this)
-        );
-
-        _amountOut = currentBusdBalance.sub(busdBalance);
-      } else {
-        uint256 currentTemBalance = IERC20(tem).balanceOf(
-          address(this)
-        );
-        _amountOut = currentTemBalance.sub(busdBalance);
-      }
+      _amountOut = _swapWithUniswapV3(
+        _amountIn,
+        _minAmountOut,
+        _tokenA,
+        _tokenB
+      );
     } else {
       if (_tokenA == tem) {
-        _swapWithUniswapV3(_amountIn, _minAmountOut, _tokenA, busd);
-
-        uint256 currentBusdBalance = IERC20(busd).balanceOf(
-          address(this)
+        _amountOut = _swapWithUniswapV3(
+          _amountIn,
+          _minAmountOut,
+          _tokenA,
+          busd
         );
-
-        _amountOut = currentBusdBalance.sub(busdBalance);
         _tokenA = busd;
       }
 
-      // console.log(
-      //   "Transferring from %s A token %s %s tokens",
-      //   msg.sender,
-      //   _tokenA,
-      //   _amountOut
-      // );
-
       if (_tokenA != tem) {
         if (_tokenB == tem) {
-          _amountOut = swapV1(
+          _amountOut = _swapV1(
             _tokenA,
             busd,
             _amountIn,
             _minAmountOut
           );
         } else {
-          _amountOut = swapV1(
+          _amountOut = _swapV1(
             _tokenA,
             _tokenB,
             _amountIn,
@@ -1045,25 +1023,17 @@ contract TemplarRouter is Ownable {
       }
 
       if (_tokenB == tem) {
-        // BUSD --> TEM
-        _swapWithUniswapV3(_amountIn, _minAmountOut, busd, _tokenB);
-
-        uint256 currentTemBalance = IERC20(tem).balanceOf(
-          address(this)
+        _amountOut = _swapWithUniswapV3(
+          _amountIn,
+          _minAmountOut,
+          busd,
+          _tokenB
         );
-
-        require(
-          currentTemBalance > temBalance,
-          "TEM balance is less than current balance"
-        );
-
-        _amountOut = currentTemBalance.sub(temBalance);
       }
     }
 
     require(_amountOut >= _minAmountOut, "slippage");
 
-    // transfer
     IERC20(_tokenB).safeTransfer(msg.sender, _amountOut);
 
     emit Swap(
@@ -1078,20 +1048,22 @@ contract TemplarRouter is Ownable {
     return _amountOut;
   }
 
-  function swapV1(
+  // ------------------------------
+  // internal
+  // ------------------------------
+
+  function _swapV1(
     address _tokenA,
     address _tokenB,
     uint256 _amountIn,
     uint256 _minAmountOut
-  ) internal returns (uint256) {
-    uint256 _amountOut;
-
+  ) internal returns (uint256 _amountOut) {
     if (_tokenB == tm) {
-      _amountOut = zapMint(_tokenA, _amountIn, _minAmountOut);
+      _amountOut = _zapMint(_tokenA, _amountIn, _minAmountOut);
     } else if (_tokenA == tm) {
-      _amountOut = zapRedeem(_tokenB, _amountIn, _minAmountOut);
+      _amountOut = _zapRedeem(_tokenB, _amountIn, _minAmountOut);
     } else {
-      _amountOut = stableSwap(
+      _amountOut = _stableSwap(
         _tokenA,
         _tokenB,
         _amountIn,
@@ -1102,59 +1074,12 @@ contract TemplarRouter is Ownable {
     return _amountOut;
   }
 
-  function getAmountOut(
-    address _tokenA,
-    address _tokenB,
-    uint256 _amountIn
-  ) external view allowTokenList(_tokenA, _tokenB) returns (uint256) {
-    uint256 _balance = _amountIn;
-    if (_tokenA == tm) {
-      // from TM
-      _balance = ITreasury(treasury).tmToReserveAmount(_balance); // swap TM to BUSD
-      _tokenA = busd;
-
-      if (_tokenB == busd) {
-        // target is BUSD
-        return _balance;
-      }
-    }
-
-    // _tokenA is BUSD, USDT, USDC, DAI
-    if (_tokenB == tm) {
-      // target is TM
-      if (_tokenA != busd) {
-        _balance = IStableRouter(stableRouter).get_dy(
-          tokenParam[_tokenA],
-          tokenParam[busd],
-          _balance
-        ); // swap xxx to BUSD
-      }
-      _balance = ITreasury(treasury).reserveToTMAmount(_balance);
-    } else {
-      _balance = IStableRouter(stableRouter).get_dy(
-        tokenParam[_tokenA],
-        tokenParam[_tokenB],
-        _balance
-      );
-    }
-
-    return _balance;
-  }
-
-  // ------------------------------
-  // internal
-  // ------------------------------
-  function zapMint(
+  function _zapMint(
     address _token,
     uint256 _amountIn,
     uint256 _minAmountOut
   ) internal returns (uint256) {
     // swap to BUSD
-    // IERC20(_token).safeTransferFrom(
-    //   msg.sender,
-    //   address(this),
-    //   _amountIn
-    // );
     uint256 _balance = (_token == busd)
       ? _amountIn
       : _swap(_token, busd, _amountIn, _minAmountOut);
@@ -1163,18 +1088,15 @@ contract TemplarRouter is Ownable {
     IERC20(busd).safeApprove(treasury, _balance);
     uint256 _amountOut = ITreasury(treasury).mint(_balance);
 
-    // transfer TM
-    // IERC20(tm).safeTransfer(msg.sender, _amountOut);
     return _amountOut;
   }
 
-  function zapRedeem(
+  function _zapRedeem(
     address _token,
     uint256 _amountIn,
     uint256 _minAmountOut
   ) internal returns (uint256) {
     // redeem to BUSD
-    // IERC20(tm).safeTransferFrom(msg.sender, address(this), _amountIn);
     IERC20(tm).safeApprove(treasury, _amountIn);
     uint256 _balance = ITreasury(treasury).redeem(_amountIn);
 
@@ -1183,23 +1105,15 @@ contract TemplarRouter is Ownable {
       ? _balance
       : _swap(busd, _token, _balance, _minAmountOut);
 
-    // transfer
-    // IERC20(_token).safeTransfer(msg.sender, _amountOut);
     return _amountOut;
   }
 
-  function stableSwap(
+  function _stableSwap(
     address _tokenA,
     address _tokenB,
     uint256 _amountIn,
     uint256 _minAmountOut
   ) internal returns (uint256) {
-    // IERC20(_tokenA).safeTransferFrom(
-    //   msg.sender,
-    //   address(this),
-    //   _amountIn
-    // );
-
     uint256 _amountOut = _swap(
       _tokenA,
       _tokenB,
@@ -1207,8 +1121,6 @@ contract TemplarRouter is Ownable {
       _minAmountOut
     );
 
-    // transfer
-    // IERC20(_tokenB).safeTransfer(msg.sender, _amountOut);
     return _amountOut;
   }
 
@@ -1218,7 +1130,6 @@ contract TemplarRouter is Ownable {
     uint256 _amountIn,
     uint256 _minAmountOut
   ) internal returns (uint256) {
-    // swap
     IERC20(_tokenA).safeApprove(stableRouter, _amountIn);
     uint256 _balance = IStableRouter(stableRouter).exchange(
       tokenParam[_tokenA],
@@ -1226,23 +1137,23 @@ contract TemplarRouter is Ownable {
       _amountIn,
       _minAmountOut
     );
-
-    require(_balance >= _minAmountOut, "slippage");
     return _balance;
   }
 
   function _swapWithUniswapV3(
-    uint256 amountIn,
-    uint256 minAmountOut,
+    uint256 _amountIn,
+    uint256 _minAmountOut,
     address _tokenA,
     address _tokenB
-  )
-    internal
-    onlyUniTokenWhitelist(_tokenA)
-    onlyUniTokenWhitelist(_tokenB)
-  {
+  ) internal returns (uint256 _amountOut) {
+    // Check _tokenB balane before
+    uint256 _tokenBalanceBefore = IERC20(_tokenB).balanceOf(
+      address(this)
+    );
+
     // Permit2 token approval
-    IERC20(_tokenA).safeApprove(permit2, amountIn);
+    IERC20(_tokenA).safeApprove(permit2, _amountIn);
+
     IPermitV2(permit2).approve(
       _tokenA,
       uniRouter,
@@ -1273,27 +1184,26 @@ contract TemplarRouter is Ownable {
     address MSG_SENDER = 0x0000000000000000000000000000000000000001;
     inputs[0] = abi.encode(
       MSG_SENDER,
-      amountIn,
-      minAmountOut,
+      _amountIn,
+      _minAmountOut,
       paths,
       true
     );
 
     IUniversalRouter router = IUniversalRouter(uniRouter);
     router.execute(commands, inputs, block.timestamp + 60);
-  }
 
-  function testSwap(
-    uint256 amoutIn,
-    address _tokenA,
-    address _tokenB
-  ) public {
-    IERC20(_tokenA).safeTransferFrom(
-      msg.sender,
-      address(this),
-      amoutIn
+    uint256 _tokenBalanceAfter = IERC20(_tokenB).balanceOf(
+      address(this)
     );
-    _swapWithUniswapV3(amoutIn, 0, _tokenA, _tokenB);
+
+    require(
+      _tokenBalanceAfter > _tokenBalanceBefore,
+      "swap with uniswap failed"
+    );
+
+    _amountOut = _tokenBalanceAfter.sub(_tokenBalanceBefore);
+    return _amountOut;
   }
 
   // ------------------------------

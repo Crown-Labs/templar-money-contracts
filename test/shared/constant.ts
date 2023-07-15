@@ -11,7 +11,7 @@ export const BAR_ADDRESS: string =
 export const ROUTER_ADDRESS: string =
   "0x5Dc88340E1c5c6366864Ee415d6034cadd1A9897";
 export const TREASURY_ADDRESS: string =
-  "0x650E26fb02350509fd745e9f57f35927206D118a";
+  "0xCa5eeab1A111cFD29Cd5717F16216769CbD463E8";
 export const BUSD_ADDRESS: string =
   "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56";
 export const TM_ADDRESS: string =
