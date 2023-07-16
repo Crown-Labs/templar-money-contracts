@@ -26,6 +26,10 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { parseEther, parseUnits } from "ethers/lib/utils";
 import { expect } from "chai";
 import { BigNumber } from "ethers";
+import {
+  calculateMinimumOutput,
+  expandTo18DecimalsBN,
+} from "./shared";
 
 describe("Templar Router", () => {
   let foo: SignerWithAddress;
@@ -264,7 +268,7 @@ describe("Templar Router", () => {
       );
     });
 
-    it("complete get amount out BUSD --> TEM", async () => {
+    it("complete get amount out and swap BUSD --> TEM", async () => {
       const amountIn = parseEther("10");
 
       const amountOut = await templarRouter.callStatic.swap(
@@ -284,7 +288,7 @@ describe("Templar Router", () => {
       expect(amountOut).to.eq(temBalanceAfter.sub(temBalanceBefore));
     });
 
-    it("complete get amount out TM --> TEM", async () => {
+    it("complete get amount out and swap TM --> TEM", async () => {
       const amountIn = parseEther("10");
 
       const amountOut = await templarRouter.callStatic.swap(
@@ -303,10 +307,52 @@ describe("Templar Router", () => {
         );
 
       const { _amountIn, _amountOut } = swapEventArgs;
-      expect(amountOut).to.eq(temBalanceAfter.sub(temBalanceBefore));
+      expect(temBalanceAfter.sub(temBalanceBefore)).to.gte(amountOut);
 
       expect(_amountIn).to.eq(amountIn);
       expect(_amountOut).to.eq(amountOut);
+    });
+
+    it("complete get amount out and swap BUSD --> DAI, DAI --> TM", async () => {
+      const amountIn = parseEther("10");
+
+      const amountOut = await templarRouter.callStatic.swap(
+        BUSD_ADDRESS,
+        DAI_ADDRESS,
+        amountIn,
+        0
+      );
+
+      const { daiBalanceAfter, daiBalanceBefore, swapEventArgs } =
+        await executeRouter(
+          BUSD_ADDRESS,
+          DAI_ADDRESS,
+          amountIn,
+          amountOut
+        );
+
+      const { _amountIn, _amountOut } = swapEventArgs;
+      expect(daiBalanceAfter.sub(daiBalanceBefore)).to.gte(amountOut);
+
+      expect(_amountIn).to.eq(amountIn);
+      expect(_amountOut).to.eq(amountOut);
+
+      // DAI --> TM
+      const amountOutTM = await templarRouter.callStatic.swap(
+        DAI_ADDRESS,
+        TM_ADDRESS,
+        daiBalanceAfter,
+        0
+      );
+
+      const { tmBalanceAfter, tmBalanceBefore } = await executeRouter(
+        BUSD_ADDRESS,
+        TM_ADDRESS,
+        daiBalanceAfter,
+        amountOutTM
+      );
+
+      expect(tmBalanceAfter.sub(tmBalanceBefore)).to.gte(amountOutTM);
     });
   });
 

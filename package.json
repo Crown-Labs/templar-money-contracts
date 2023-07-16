@@ -34,7 +34,7 @@
   },
   "scripts": {
     "test": "npx hardhat test",
-    "test1": "npx hardhat test ./test/universalRouter.ts",
+    "test1": "npx hardhat test ./test/universalRouter.test.ts",
     "compile": "npx hardhat compile",
     "clean": "npx hardhat clean",
     "dev": "npx hardhat run scripts/migrate.js --network hardhat",
@@ -42,6 +42,7 @@
     "deploy": "npx hardhat run scripts/deploy.js"
   },
   "dependencies": {
-    "@uniswap/v3-periphery": "^1.4.3"
+    "@uniswap/v3-periphery": "^1.4.3",
+    "bignumber.js": "^9.1.1"
   }
 }
