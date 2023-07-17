@@ -7,9 +7,15 @@ export function expandTo18DecimalsBN(n: number): BigNumber {
     new bn(n).times(new bn(10).pow(18)).toFixed()
   );
 }
+
+// Input amount without slippage
+// Slippage percentage
 export function calculateMinimumOutput(
-  expectedAmountOut: BigNumber,
-  slippageTolerance: BigNumber
+  inputAmount: BigNumber,
+  slippagePercentage: number
 ): BigNumber {
-  return expectedAmountOut.mul(1).mul(slippageTolerance);
+  const slippageAmount: BigNumber = inputAmount
+    .mul(slippagePercentage)
+    .div(100);
+  return inputAmount.sub(slippageAmount);
 }

@@ -974,6 +974,7 @@ contract TemplarRouter is Ownable {
     allowTokenList(_tokenA, _tokenB)
     returns (uint256 _amountOut)
   {
+    address _tokenABefore = _tokenA;
     IERC20(_tokenA).safeTransferFrom(
       msg.sender,
       address(this),
@@ -985,48 +986,23 @@ contract TemplarRouter is Ownable {
       (_tokenA == tem && _tokenB == busd) ||
       (_tokenA == busd && _tokenB == tem)
     ) {
-      _amountOut = _swapWithUniswapV3(
-        _amountIn,
-        _minAmountOut,
-        _tokenA,
-        _tokenB
-      );
+      _amountOut = _swapWithUniswapV3(_amountIn, 0, _tokenA, _tokenB);
     } else {
       if (_tokenA == tem) {
-        _amountOut = _swapWithUniswapV3(
-          _amountIn,
-          _minAmountOut,
-          _tokenA,
-          busd
-        );
+        _amountOut = _swapWithUniswapV3(_amountIn, 0, _tokenA, busd);
         _tokenA = busd;
       }
 
       if (_tokenA != tem) {
         if (_tokenB == tem) {
-          _amountOut = _swapV1(
-            _tokenA,
-            busd,
-            _amountIn,
-            _minAmountOut
-          );
+          _amountOut = _swapV1(_tokenA, busd, _amountIn, 0);
         } else {
-          _amountOut = _swapV1(
-            _tokenA,
-            _tokenB,
-            _amountIn,
-            _minAmountOut
-          );
+          _amountOut = _swapV1(_tokenA, _tokenB, _amountIn, 0);
         }
       }
 
       if (_tokenB == tem) {
-        _amountOut = _swapWithUniswapV3(
-          _amountIn,
-          _minAmountOut,
-          busd,
-          _tokenB
-        );
+        _amountOut = _swapWithUniswapV3(_amountOut, 0, busd, _tokenB);
       }
     }
 
@@ -1036,7 +1012,7 @@ contract TemplarRouter is Ownable {
 
     emit Swap(
       msg.sender,
-      _tokenA,
+      _tokenABefore,
       _tokenB,
       _amountIn,
       _minAmountOut,
