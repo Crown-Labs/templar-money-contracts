@@ -122,11 +122,6 @@ describe("Templar Router", () => {
         ROUTER_ADDRESS
       )) as TemplarRouter;
 
-    await templarRouter.addUniTokenWhitelist([
-      BUSD_ADDRESS,
-      TEM_ADDRESS,
-    ]);
-
     // approve tokens
     await busdContract
       .connect(foo)

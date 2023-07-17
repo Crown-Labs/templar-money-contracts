@@ -897,8 +897,6 @@ contract TemplarRouter is Ownable {
   mapping(address => bool) public tokenList;
   mapping(address => int128) public tokenParam;
 
-  mapping(address => bool) public uniTokenWhitelist;
-
   event Swap(
     address indexed _address,
     address _tokenA,
@@ -1217,14 +1215,5 @@ contract TemplarRouter is Ownable {
   function removeTokenList(address _token) external onlyOwner {
     require(_token != address(0), "address invalid");
     tokenList[_token] = false;
-  }
-
-  function addUniTokenWhitelist(address[] calldata tokenAddresses)
-    external
-    onlyOwner
-  {
-    for (uint256 i = 0; i < tokenAddresses.length; i++) {
-      uniTokenWhitelist[tokenAddresses[i]] = true;
-    }
   }
 }
