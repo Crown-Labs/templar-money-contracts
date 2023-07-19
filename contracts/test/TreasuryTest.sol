@@ -880,7 +880,7 @@ contract TreasuryTest is Ownable {
         return treasuryBalance().mul(1e18).div(_supply);
     }
 
-    function reservePrice() public view returns (uint256) {
+    function reservePrice() public pure returns (uint256) {
         // bypass oracle price feed in localtest
         return 1*10**18; 
         //( , int256 price, , , ) = AggregatorV3Interface(reserveOracle).latestRoundData();

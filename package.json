@@ -43,6 +43,7 @@
   },
   "dependencies": {
     "@uniswap/v3-periphery": "^1.4.3",
+    "@openzeppelin/contracts": "^4.8.0",
     "bignumber.js": "^9.1.1"
   }
 }
