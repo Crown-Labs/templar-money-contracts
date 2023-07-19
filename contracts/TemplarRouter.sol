@@ -161,19 +161,27 @@ contract TemplarRouter is Ownable {
       }
     }*/
 
+    // DAI -> TEM
+    // DAI -> USDC
+    // TEM -> DAI 
+    // TM -> TEM 
+    // TEM -> TM 
+    // TM -> DAI  
+    // BUSD -> TEM 
+    // TEM -> BUSD .
     if (_tokenA == tem) {
-      _amountOut = _swapWithUniswapV3(_amountIn, 0, _tokenA, busd);
+      _amountOut = _swapWithUniswapV3(_amountIn, 0, tem, busd);
       if (_tokenB != busd) {
-        _amountOut = _swapV1(busd, _tokenB, _amountOut, 0);
+        _amountOut = _swapStableTM(busd, _tokenB, _amountOut, 0);
       }
     } else if (_tokenB == tem) {
       uint256 amountIn = _amountIn;
       if (_tokenA != busd) {
-        amountIn = _swapV1(_tokenA, busd, amountIn, 0);
+        amountIn = _swapStableTM(_tokenA, busd, amountIn, 0);
       }
       _amountOut = _swapWithUniswapV3(amountIn, 0, busd, tem);
     } else {
-      _amountOut = _swapV1(_tokenA, _tokenB, _amountIn, 0);
+      _amountOut = _swapStableTM(_tokenA, _tokenB, _amountIn, 0);
     }
 
     require(_amountOut >= _minAmountOut, "slippage");
@@ -195,7 +203,7 @@ contract TemplarRouter is Ownable {
   // ------------------------------
   // internal
   // ------------------------------
-  function _swapV1(
+  function _swapStableTM(
     address _tokenA,
     address _tokenB,
     uint256 _amountIn,
