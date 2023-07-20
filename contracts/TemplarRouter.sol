@@ -52,8 +52,10 @@ contract TemplarRouter is Ownable {
   address public immutable tem;
   address public immutable stableRouter;
   address public immutable uniRouter;
-  address public immutable permit2 = address(0x000000000022D473030F116dDEE9F6B43aC78BA3);
-  address public immutable quoter2 = address(0x78D78E420Da98ad378D7799bE8f4AF69033EB077);
+  address public immutable permit2 =
+    address(0x000000000022D473030F116dDEE9F6B43aC78BA3);
+  address public immutable quoter2 =
+    address(0x78D78E420Da98ad378D7799bE8f4AF69033EB077);
 
   uint160 public maxUInt160;
 
@@ -90,7 +92,10 @@ contract TemplarRouter is Ownable {
     require(_tem != address(0), "invalid TEM address");
     require(_wbnb != address(0), "invalid WBNB address");
     require(_stableRouter != address(0), "invalid address");
-    require(_uniRouter != address(0), "invalid UniswapV3 router address");
+    require(
+      _uniRouter != address(0),
+      "invalid UniswapV3 router address"
+    );
 
     treasury = _treasury;
     tm = _tm;
@@ -119,7 +124,10 @@ contract TemplarRouter is Ownable {
 
   modifier allowTokenList(address _tokenA, address _tokenB) {
     require(_tokenA != _tokenB, "not same token");
-    require(tokenList[_tokenA] && tokenList[_tokenB], "token not allow");
+    require(
+      tokenList[_tokenA] && tokenList[_tokenB],
+      "token not allow"
+    );
     _;
   }
 
@@ -133,42 +141,12 @@ contract TemplarRouter is Ownable {
     allowTokenList(_tokenA, _tokenB)
     returns (uint256 _amountOut)
   {
-    // address _tokenABefore = _tokenA;
-    IERC20(_tokenA).safeTransferFrom(msg.sender, address(this), _amountIn);
+    IERC20(_tokenA).safeTransferFrom(
+      msg.sender,
+      address(this),
+      _amountIn
+    );
 
-    // only TEM --> BUSD || BUSD --> TEM
-    /*if (
-      (_tokenA == tem && _tokenB == busd) ||
-      (_tokenA == busd && _tokenB == tem)
-    ) {
-      _amountOut = _swapWithUniswapV3(_amountIn, 0, _tokenA, _tokenB);
-    } else {
-      if (_tokenA == tem) {
-        _amountOut = _swapWithUniswapV3(_amountIn, 0, _tokenA, busd);
-        _tokenA = busd;
-      }
-
-      if (_tokenA != tem) {
-        if (_tokenB == tem) {
-          _amountOut = _swapV1(_tokenA, busd, _amountIn, 0);
-        } else {
-          _amountOut = _swapV1(_tokenA, _tokenB, _amountIn, 0);
-        }
-      }
-
-      if (_tokenB == tem) {
-        _amountOut = _swapWithUniswapV3(_amountOut, 0, busd, _tokenB);
-      }
-    }*/
-
-    // DAI -> TEM
-    // DAI -> USDC
-    // TEM -> DAI 
-    // TM -> TEM 
-    // TEM -> TM 
-    // TM -> DAI  
-    // BUSD -> TEM 
-    // TEM -> BUSD .
     if (_tokenA == tem) {
       _amountOut = _swapWithUniswapV3(_amountIn, 0, tem, busd);
       if (_tokenB != busd) {
