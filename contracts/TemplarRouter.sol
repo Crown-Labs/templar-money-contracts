@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "./interfaces/IUniversalRouter.sol";
 import "./interfaces/IPermitV2.sol";
-import "./interfaces/IQuoterV2.sol";
 import "./libraries/Commands.sol";
 import "./libraries/SafeERC20.sol";
 
@@ -52,12 +51,7 @@ contract TemplarRouter is Ownable {
   address public immutable tem;
   address public immutable stableRouter;
   address public immutable uniRouter;
-  address public immutable permit2 =
-    address(0x000000000022D473030F116dDEE9F6B43aC78BA3);
-  address public immutable quoter2 =
-    address(0x78D78E420Da98ad378D7799bE8f4AF69033EB077);
-
-  uint160 public maxUInt160;
+  address public immutable permit2;
 
   mapping(address => bool) public tokenList;
   mapping(address => int128) public tokenParam;
@@ -71,6 +65,15 @@ contract TemplarRouter is Ownable {
     uint256 _amountOut
   );
 
+  modifier allowTokenList(address _tokenA, address _tokenB) {
+    require(_tokenA != _tokenB, "not same token");
+    require(
+      tokenList[_tokenA] && tokenList[_tokenB],
+      "token not allow"
+    );
+    _;
+  }
+
   constructor(
     address _treasury,
     address _tm,
@@ -81,7 +84,8 @@ contract TemplarRouter is Ownable {
     address _tem,
     address _wbnb,
     address _stableRouter,
-    address _uniRouter
+    address _uniRouter,
+    address _permit2
   ) {
     require(_treasury != address(0), "invalid address");
     require(_tm != address(0), "invalid address");
@@ -96,6 +100,7 @@ contract TemplarRouter is Ownable {
       _uniRouter != address(0),
       "invalid UniswapV3 router address"
     );
+    require(_permit2 != address(0), "invalid permit2 address");
 
     treasury = _treasury;
     tm = _tm;
@@ -104,6 +109,7 @@ contract TemplarRouter is Ownable {
     tem = _tem;
     stableRouter = _stableRouter;
     uniRouter = _uniRouter;
+    permit2 = _permit2;
 
     // initial token list
     tokenList[_tm] = true;
@@ -118,17 +124,6 @@ contract TemplarRouter is Ownable {
     tokenParam[_usdt] = 1;
     tokenParam[_dai] = 2;
     tokenParam[_usdc] = 3;
-
-    maxUInt160 = uint160(~uint160(0));
-  }
-
-  modifier allowTokenList(address _tokenA, address _tokenB) {
-    require(_tokenA != _tokenB, "not same token");
-    require(
-      tokenList[_tokenA] && tokenList[_tokenB],
-      "token not allow"
-    );
-    _;
   }
 
   function swap(
@@ -163,7 +158,6 @@ contract TemplarRouter is Ownable {
     }
 
     require(_amountOut >= _minAmountOut, "slippage");
-
     IERC20(_tokenB).safeTransfer(msg.sender, _amountOut);
 
     emit Swap(
@@ -174,8 +168,6 @@ contract TemplarRouter is Ownable {
       _minAmountOut,
       _amountOut
     );
-
-    return _amountOut;
   }
 
   // ------------------------------
@@ -199,8 +191,6 @@ contract TemplarRouter is Ownable {
         _minAmountOut
       );
     }
-
-    return _amountOut;
   }
 
   function _zapMint(
@@ -215,9 +205,7 @@ contract TemplarRouter is Ownable {
 
     // mint
     IERC20(busd).safeApprove(treasury, _balance);
-    uint256 _amountOut = ITreasury(treasury).mint(_balance);
-
-    return _amountOut;
+    return ITreasury(treasury).mint(_balance);
   }
 
   function _zapRedeem(
@@ -233,7 +221,6 @@ contract TemplarRouter is Ownable {
     uint256 _amountOut = (_token == busd)
       ? _balance
       : _swap(busd, _token, _balance, _minAmountOut);
-
     return _amountOut;
   }
 
@@ -243,14 +230,12 @@ contract TemplarRouter is Ownable {
     uint256 _amountIn,
     uint256 _minAmountOut
   ) internal returns (uint256) {
-    uint256 _amountOut = _swap(
+    return _swap(
       _tokenA,
       _tokenB,
       _amountIn,
       _minAmountOut
     );
-
-    return _amountOut;
   }
 
   function _swap(
@@ -275,29 +260,26 @@ contract TemplarRouter is Ownable {
     address _tokenA,
     address _tokenB
   ) internal returns (uint256 _amountOut) {
-    // Check _tokenB balane before
-    uint256 _tokenBalanceBefore = IERC20(_tokenB).balanceOf(
-      address(this)
-    );
+    // Get balance before
+    uint256 balanceBefore = IERC20(_tokenB).balanceOf(address(this));
 
     // Permit2 token approval
     IERC20(_tokenA).safeApprove(permit2, _amountIn);
-
     IPermitV2(permit2).approve(
       _tokenA,
       uniRouter,
-      maxUInt160,
+      uint160(_amountIn),
       uint48(block.timestamp + 60)
     );
 
-    // Generate commands and inputs
+    // Create commands and inputs
     // 0x00 = V3_SWAP_EXACT_IN
     bytes memory commands = abi.encodePacked(
       bytes1(uint8(Commands.V3_SWAP_EXACT_IN))
     );
     bytes[] memory inputs = new bytes[](1);
 
-    // Just only parts supported
+    // Just only paths supported
     // BUSD -> WBNB -> TEM
     // TEM -> WBNB -> BUSD
     bytes memory paths = abi.encodePacked(
@@ -308,31 +290,22 @@ contract TemplarRouter is Ownable {
       _tokenB
     );
 
-    // V3_SWAP_EXACT_IN
+    // 0x00 V3_SWAP_EXACT_IN 
     // (recipient, amountIn, minAmountOut, paths, bool A flag from msg.sender)
-    address MSG_SENDER = 0x0000000000000000000000000000000000000001;
     inputs[0] = abi.encode(
-      MSG_SENDER,
+      address(0x0000000000000000000000000000000000000001), // MSG_SENDER
       _amountIn,
       _minAmountOut,
-      paths,
+      paths, 
       true
     );
 
     IUniversalRouter router = IUniversalRouter(uniRouter);
-    router.execute(commands, inputs, block.timestamp + 60);
+    router.execute(commands, inputs, block.timestamp + 60); 
 
-    uint256 _tokenBalanceAfter = IERC20(_tokenB).balanceOf(
-      address(this)
-    );
-
-    require(
-      _tokenBalanceAfter > _tokenBalanceBefore,
-      "swap with uniswap failed"
-    );
-
-    _amountOut = _tokenBalanceAfter - _tokenBalanceBefore;
-    return _amountOut;
+    uint256 balanceAfter = IERC20(_tokenB).balanceOf(address(this));
+    require(balanceAfter > balanceBefore, "swap with uniswap failed");
+    _amountOut = balanceAfter - balanceBefore;
   }
 
   // ------------------------------

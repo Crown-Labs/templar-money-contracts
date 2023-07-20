@@ -18,13 +18,14 @@ import {
   DAI_ADDRESS,
   BAR_ADDRESS,
   BHOT_ADDRESS,
+  PERMITV2_ADDRESS,
 } from "./shared/constant";
 import { parseEvents, EVENT } from "./shared/parseEvents";
 
 import { abi as TOKEN_ABI } from "./shared/abis/ERC20.json";
 import QuoterV2 from "./shared/abis/QuoterV2.json";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { parseEther, parseUnits } from "ethers/lib/utils";
+import { parseEther, parseUnits, formatEther } from "ethers/lib/utils";
 import { expect } from "chai";
 import { BigNumber } from "ethers";
 import {
@@ -126,7 +127,8 @@ describe("Templar Router", () => {
         TEM_ADDRESS,
         WBNB_ADDRESS,
         STABLE_ROUTER_ADDRESS,
-        ROUTER_ADDRESS
+        ROUTER_ADDRESS,
+        PERMITV2_ADDRESS
       )) as TemplarRouter;
 
     // approve tokens
