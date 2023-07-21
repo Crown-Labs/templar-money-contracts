@@ -65,7 +65,6 @@ module.exports = {
     hardhat: {
       forking: {
         url: "https://bsc-dataseed2.binance.org",
-        blockNumber: 29747128,
       },
     },
     // ropsten: {

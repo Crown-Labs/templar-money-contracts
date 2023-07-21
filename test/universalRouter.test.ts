@@ -19,25 +19,22 @@ import {
   BAR_ADDRESS,
   BHOT_ADDRESS,
   PERMITV2_ADDRESS,
+  QUOTER2_ADDRESS,
 } from "./shared/constant";
 import { parseEvents, EVENT } from "./shared/parseEvents";
 
 import { abi as TOKEN_ABI } from "./shared/abis/ERC20.json";
 import QuoterV2 from "./shared/abis/QuoterV2.json";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { parseEther, parseUnits, formatEther } from "ethers/lib/utils";
+import { parseEther, parseUnits } from "ethers/lib/utils";
 import { expect } from "chai";
 import { BigNumber } from "ethers";
-import {
-  calculateMinimumOutput,
-  expandTo18DecimalsBN,
-} from "./shared";
+import { calculateMinimumOutput } from "./shared";
 
 describe("Templar Router", () => {
   let foo: SignerWithAddress;
   let bar: SignerWithAddress;
   let bhot: SignerWithAddress;
-
   let treasury: Treasury;
   let templarRouter: TemplarRouter;
   let tmContract: Erc20;
@@ -128,7 +125,8 @@ describe("Templar Router", () => {
         WBNB_ADDRESS,
         STABLE_ROUTER_ADDRESS,
         ROUTER_ADDRESS,
-        PERMITV2_ADDRESS
+        PERMITV2_ADDRESS,
+        QUOTER2_ADDRESS
       )) as TemplarRouter;
 
     // approve tokens
@@ -147,15 +145,167 @@ describe("Templar Router", () => {
     await tmContract
       .connect(foo)
       ["approve(address,uint256)"](templarRouter.address, MAX_UINT);
+
+    // Transfer DAI token
+    await daiContract
+      .connect(bhot)
+      ["transfer(address,uint256)"](foo.address, parseEther("1000"));
   });
 
-  describe("UniswapV3 swaptoken", () => {
+  describe("TemplarRouter getAmountOut", () => {
+    it("TM --> TEM", async () => {
+      const amountIn = parseEther("1");
+      const amountOut = await templarRouter
+        .connect(bhot)
+        .callStatic["getAmountOut(address,address,uint256)"](
+          TM_ADDRESS,
+          TEM_ADDRESS,
+          amountIn
+        );
+      let amountOut1 = await templarRouter.callStatic.swap(
+        TM_ADDRESS,
+        TEM_ADDRESS,
+        amountIn,
+        0
+      );
+      expect(amountOut).to.be.equal(amountOut1);
+    });
+
+    it("TEM --> TM", async () => {
+      const amountIn = parseUnits("1", "gwei");
+      const amountOut = await templarRouter
+        .connect(bhot)
+        .callStatic["getAmountOut(address,address,uint256)"](
+          TEM_ADDRESS,
+          TM_ADDRESS,
+
+          amountIn
+        );
+      let amountOut1 = await templarRouter.callStatic.swap(
+        TEM_ADDRESS,
+        TM_ADDRESS,
+        amountIn,
+        0
+      );
+      expect(amountOut).to.be.equal(amountOut1);
+    });
+
+    it("BUSD --> TEM", async () => {
+      const amountIn = parseEther("1");
+      const amountOut = await templarRouter
+        .connect(bhot)
+        .callStatic["getAmountOut(address,address,uint256)"](
+          BUSD_ADDRESS,
+          TEM_ADDRESS,
+          amountIn
+        );
+      let amountOut1 = await templarRouter.callStatic.swap(
+        BUSD_ADDRESS,
+        TEM_ADDRESS,
+        amountIn,
+        0
+      );
+      expect(amountOut).to.be.equal(amountOut1);
+    });
+
+    it("BUSD --> TM", async () => {
+      const amountIn = parseEther("1");
+      const amountOut = await templarRouter
+        .connect(bhot)
+        .callStatic["getAmountOut(address,address,uint256)"](
+          BUSD_ADDRESS,
+          TM_ADDRESS,
+          amountIn
+        );
+      let amountOut1 = await templarRouter.callStatic.swap(
+        BUSD_ADDRESS,
+        TM_ADDRESS,
+        amountIn,
+        0
+      );
+      expect(amountOut).to.be.equal(amountOut1);
+    });
+
+    it("BUSD --> DAI", async () => {
+      const amountIn = parseEther("1");
+      const amountOut = await templarRouter
+        .connect(bhot)
+        .callStatic["getAmountOut(address,address,uint256)"](
+          BUSD_ADDRESS,
+          DAI_ADDRESS,
+          amountIn
+        );
+      let amountOut1 = await templarRouter.callStatic.swap(
+        BUSD_ADDRESS,
+        DAI_ADDRESS,
+        amountIn,
+        0
+      );
+      expect(amountOut).to.be.equal(amountOut1);
+    });
+
+    it("TEM --> BUSD", async () => {
+      const amountIn = parseUnits("1", "gwei");
+      const amountOut = await templarRouter
+        .connect(bhot)
+        .callStatic["getAmountOut(address,address,uint256)"](
+          TEM_ADDRESS,
+          BUSD_ADDRESS,
+          amountIn
+        );
+      let amountOut1 = await templarRouter.callStatic.swap(
+        TEM_ADDRESS,
+        BUSD_ADDRESS,
+        amountIn,
+        0
+      );
+      expect(amountOut).to.be.equal(amountOut1);
+    });
+
+    it("TEM --> DAI", async () => {
+      const amountIn = parseUnits("1", "gwei");
+      const amountOut = await templarRouter
+        .connect(bhot)
+        .callStatic["getAmountOut(address,address,uint256)"](
+          TEM_ADDRESS,
+          DAI_ADDRESS,
+          amountIn
+        );
+      let amountOut1 = await templarRouter.callStatic.swap(
+        TEM_ADDRESS,
+        DAI_ADDRESS,
+        amountIn,
+        0
+      );
+      expect(amountOut).to.be.equal(amountOut1);
+    });
+
+    it("DAI --> TEM", async () => {
+      const amountIn = parseUnits("1", "ether");
+      const amountOut = await templarRouter
+        .connect(bhot)
+        .callStatic["getAmountOut(address,address,uint256)"](
+          DAI_ADDRESS,
+          TEM_ADDRESS,
+          amountIn
+        );
+      let amountOut1 = await templarRouter.callStatic.swap(
+        DAI_ADDRESS,
+        TEM_ADDRESS,
+        amountIn,
+        0
+      );
+      expect(amountOut).to.be.equal(amountOut1);
+    });
+  });
+
+  describe("TemplarRouter swap token", () => {
     it("reverts for dai amount exceeds balance", async function () {
       await expect(
         templarRouter["swap(address,address,uint256,uint256)"](
           DAI_ADDRESS,
           BUSD_ADDRESS,
-          parseEther("100"),
+          parseEther("1000000"),
           0
         )
       ).to.be.reverted;
@@ -164,7 +314,6 @@ describe("Templar Router", () => {
     it("completes a trade for BUSD --> DAI", async function () {
       const amountIn = parseEther("100");
       const amountOutMin = parseEther("99");
-
       const {
         busdBalanceAfter,
         busdBalanceBefore,
@@ -176,7 +325,6 @@ describe("Templar Router", () => {
         amountIn,
         amountOutMin
       );
-
       expect(busdBalanceBefore.sub(amountIn)).to.eq(busdBalanceAfter);
       expect(daiBalanceAfter.sub(daiBalanceBefore)).to.be.gte(
         amountOutMin
@@ -186,14 +334,12 @@ describe("Templar Router", () => {
     it("completes a trade for BUSD ---> DAI, DAI --> TEM", async function () {
       const amountIn = parseEther("10");
       const amountOutMin = parseEther("0");
-
       await executeRouter(
         BUSD_ADDRESS,
         DAI_ADDRESS,
         parseEther("20"),
         amountOutMin
       );
-
       const { temBalanceAfter, temBalanceBefore } =
         await executeRouter(
           DAI_ADDRESS,
@@ -201,7 +347,6 @@ describe("Templar Router", () => {
           amountIn,
           amountOutMin
         );
-
       expect(temBalanceAfter.sub(temBalanceBefore)).to.be.gte(
         amountOutMin
       );
@@ -210,7 +355,6 @@ describe("Templar Router", () => {
     it("completes a trade for TEM --> BUSD", async function () {
       const amountIn = parseUnits("10", 9);
       const amountOutMin = parseEther("14");
-
       const {
         busdBalanceAfter,
         busdBalanceBefore,
@@ -222,7 +366,6 @@ describe("Templar Router", () => {
         amountIn,
         amountOutMin
       );
-
       expect(temBalanceBefore.sub(amountIn)).to.eq(temBalanceAfter);
       expect(busdBalanceAfter.sub(busdBalanceBefore)).to.be.gte(
         amountOutMin
@@ -233,7 +376,6 @@ describe("Templar Router", () => {
     it("completes a trade for TEM --> USDT", async function () {
       const amountIn = parseUnits("10", 9);
       const amountOutMin = parseEther("0");
-
       const {
         usdtBalanceAfter,
         usdtBalanceBefore,
@@ -245,7 +387,6 @@ describe("Templar Router", () => {
         amountIn,
         amountOutMin
       );
-
       expect(temBalanceBefore.sub(amountIn)).to.eq(temBalanceAfter);
       expect(usdtBalanceAfter.sub(usdtBalanceBefore)).to.be.gte(
         amountOutMin
@@ -254,7 +395,6 @@ describe("Templar Router", () => {
 
     it("completes a trade for BUSD --> TM", async function () {
       const amountIn = parseEther("10");
-
       let minAmountOut = await templarRouter.callStatic.swap(
         BUSD_ADDRESS,
         TM_ADDRESS,
@@ -262,7 +402,6 @@ describe("Templar Router", () => {
         0
       );
       minAmountOut = calculateMinimumOutput(minAmountOut, 1);
-
       const {
         busdBalanceAfter,
         busdBalanceBefore,
@@ -274,7 +413,6 @@ describe("Templar Router", () => {
         amountIn,
         minAmountOut
       );
-
       expect(busdBalanceBefore.sub(amountIn)).to.eq(busdBalanceAfter);
       expect(tmBalanceAfter.sub(tmBalanceBefore)).to.be.gte(
         minAmountOut
@@ -283,7 +421,6 @@ describe("Templar Router", () => {
 
     it("completes a trade for TM --> BUSD", async function () {
       const amountIn = parseEther("10");
-
       let minAmountOut = await templarRouter.callStatic.swap(
         TM_ADDRESS,
         BUSD_ADDRESS,
@@ -291,7 +428,6 @@ describe("Templar Router", () => {
         0
       );
       minAmountOut = calculateMinimumOutput(minAmountOut, 1);
-
       const {
         tmBalanceAfter,
         tmBalanceBefore,
@@ -303,7 +439,6 @@ describe("Templar Router", () => {
         amountIn,
         minAmountOut
       );
-
       expect(tmBalanceBefore.sub(amountIn)).to.eq(tmBalanceAfter);
       expect(busdBalanceAfter.sub(busdBalanceBefore)).to.be.gte(
         minAmountOut
@@ -313,7 +448,6 @@ describe("Templar Router", () => {
     it("stable swap completes a trade for BUSD --> USDT", async function () {
       const amountIn = parseEther("10");
       const amountOutMin = parseEther("9");
-
       const {
         busdBalanceAfter,
         busdBalanceBefore,
@@ -325,7 +459,6 @@ describe("Templar Router", () => {
         amountIn,
         amountOutMin
       );
-
       expect(busdBalanceBefore.sub(amountIn)).to.eq(busdBalanceAfter);
       expect(usdtBalanceAfter.sub(usdtBalanceBefore)).to.be.gte(
         amountOutMin
@@ -334,7 +467,6 @@ describe("Templar Router", () => {
 
     it("complete get amount out with slippage 1% and swap BUSD --> TEM", async () => {
       const amountIn = parseEther("10");
-
       let minAmountOut = await templarRouter.callStatic.swap(
         BUSD_ADDRESS,
         TEM_ADDRESS,
@@ -342,7 +474,6 @@ describe("Templar Router", () => {
         0
       );
       minAmountOut = calculateMinimumOutput(minAmountOut, 1);
-
       const { temBalanceAfter, temBalanceBefore } =
         await executeRouter(
           BUSD_ADDRESS,
@@ -357,16 +488,13 @@ describe("Templar Router", () => {
 
     it("complete get amount out with slippage 1% and swap TM --> TEM", async () => {
       const amountIn = parseEther("10");
-
       let minAmountOut = await templarRouter.callStatic.swap(
         TM_ADDRESS,
         TEM_ADDRESS,
         amountIn,
         0
       );
-
       minAmountOut = calculateMinimumOutput(minAmountOut, 1);
-
       const { temBalanceAfter, temBalanceBefore, swapEventArgs } =
         await executeRouter(
           TM_ADDRESS,
@@ -374,28 +502,23 @@ describe("Templar Router", () => {
           amountIn,
           minAmountOut
         );
-
       const { _amountIn, _amountOut } = swapEventArgs;
       expect(temBalanceAfter.sub(temBalanceBefore)).to.gte(
         minAmountOut
       );
-
       expect(_amountIn).to.eq(amountIn);
       expect(_amountOut).to.eq(temBalanceAfter.sub(temBalanceBefore));
     });
 
     it("complete get amount out and swap BUSD --> DAI, DAI --> TM", async () => {
       const amountIn = parseEther("10");
-
       let minAmountOut = await templarRouter.callStatic.swap(
         BUSD_ADDRESS,
         DAI_ADDRESS,
         amountIn,
         0
       );
-
       minAmountOut = calculateMinimumOutput(minAmountOut, 1);
-
       const { daiBalanceAfter, daiBalanceBefore, swapEventArgs } =
         await executeRouter(
           BUSD_ADDRESS,
@@ -403,24 +526,19 @@ describe("Templar Router", () => {
           amountIn,
           minAmountOut
         );
-
       const { _amountIn, _amountOut } = swapEventArgs;
       expect(daiBalanceAfter.sub(daiBalanceBefore)).to.gte(
         minAmountOut
       );
-
       expect(_amountIn).to.eq(amountIn);
       expect(_amountOut).to.eq(daiBalanceAfter.sub(daiBalanceBefore));
-
       // DAI --> TM
-
       let minAmountOutTM = await templarRouter.callStatic.swap(
         DAI_ADDRESS,
         TM_ADDRESS,
         daiBalanceAfter,
         0
       );
-
       minAmountOutTM = calculateMinimumOutput(minAmountOutTM, 1);
       const { tmBalanceAfter, tmBalanceBefore } = await executeRouter(
         DAI_ADDRESS,
@@ -428,7 +546,6 @@ describe("Templar Router", () => {
         daiBalanceAfter,
         minAmountOutTM
       );
-
       expect(tmBalanceAfter.sub(tmBalanceBefore)).to.gte(
         minAmountOutTM
       );

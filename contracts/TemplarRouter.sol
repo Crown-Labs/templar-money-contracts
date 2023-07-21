@@ -8,6 +8,7 @@ import "./interfaces/IUniversalRouter.sol";
 import "./interfaces/IPermitV2.sol";
 import "./libraries/Commands.sol";
 import "./libraries/SafeERC20.sol";
+import "./interfaces/IQuoterV2.sol";
 
 interface IStableRouter {
   function exchange(
@@ -52,6 +53,7 @@ contract TemplarRouter is Ownable {
   address public immutable stableRouter;
   address public immutable uniRouter;
   address public immutable permit2;
+  address public immutable quoter2;
 
   mapping(address => bool) public tokenList;
   mapping(address => int128) public tokenParam;
@@ -85,7 +87,8 @@ contract TemplarRouter is Ownable {
     address _wbnb,
     address _stableRouter,
     address _uniRouter,
-    address _permit2
+    address _permit2,
+    address _quoter2
   ) {
     require(_treasury != address(0), "invalid address");
     require(_tm != address(0), "invalid address");
@@ -110,6 +113,7 @@ contract TemplarRouter is Ownable {
     stableRouter = _stableRouter;
     uniRouter = _uniRouter;
     permit2 = _permit2;
+    quoter2 = _quoter2;
 
     // initial token list
     tokenList[_tm] = true;
@@ -170,9 +174,81 @@ contract TemplarRouter is Ownable {
     );
   }
 
+  function getAmountOut(
+    address _tokenA,
+    address _tokenB,
+    uint256 _amountIn
+  )
+    external
+    payable
+    allowTokenList(_tokenA, _tokenB)
+    returns (uint256 _amountOut)
+  {
+    if (_tokenA == tem) {
+      _amountOut = _getQuoteExactInput(tem, busd, _amountIn);
+      if (_tokenB != busd) {
+        _amountOut = _getExactInputSwapStableTM(
+          busd,
+          _tokenB,
+          _amountOut
+        );
+      }
+    } else if (_tokenB == tem) {
+      uint256 amountIn = _amountIn;
+      if (_tokenA != busd) {
+        amountIn = _getExactInputSwapStableTM(
+          _tokenA,
+          busd,
+          amountIn
+        );
+      }
+      _amountOut = _getQuoteExactInput(busd, tem, amountIn);
+    } else {
+      _amountOut = _getExactInputSwapStableTM(
+        _tokenA,
+        _tokenB,
+        _amountIn
+      );
+    }
+  }
+
   // ------------------------------
   // internal
   // ------------------------------
+  function _getQuoteExactInput(
+    address _tokenA,
+    address _tokenB,
+    uint256 _amountIn
+  ) internal returns (uint256 amountOut) {
+    bytes memory paths = abi.encodePacked(
+      _tokenA,
+      uint24(3000),
+      wbnb,
+      uint24(3000),
+      _tokenB
+    );
+    IQuoterV2 q = IQuoterV2(quoter2);
+    (amountOut, , , ) = q.quoteExactInput(paths, _amountIn);
+  }
+
+  function _getExactInputSwapStableTM(
+    address _tokenA,
+    address _tokenB,
+    uint256 _amountIn
+  ) internal view returns (uint256 _amountOut) {
+    if (_tokenB == tm) {
+      _amountOut = ITreasury(treasury).reserveToTMAmount(_amountIn);
+    } else if (_tokenA == tm) {
+      _amountOut = ITreasury(treasury).tmToReserveAmount(_amountIn);
+    } else {
+      _amountOut = IStableRouter(stableRouter).get_dy(
+        tokenParam[_tokenA],
+        tokenParam[_tokenB],
+        _amountIn
+      );
+    }
+  }
+
   function _swapStableTM(
     address _tokenA,
     address _tokenB,
@@ -230,12 +306,7 @@ contract TemplarRouter is Ownable {
     uint256 _amountIn,
     uint256 _minAmountOut
   ) internal returns (uint256) {
-    return _swap(
-      _tokenA,
-      _tokenB,
-      _amountIn,
-      _minAmountOut
-    );
+    return _swap(_tokenA, _tokenB, _amountIn, _minAmountOut);
   }
 
   function _swap(
@@ -290,18 +361,18 @@ contract TemplarRouter is Ownable {
       _tokenB
     );
 
-    // 0x00 V3_SWAP_EXACT_IN 
+    // 0x00 V3_SWAP_EXACT_IN
     // (recipient, amountIn, minAmountOut, paths, bool A flag from msg.sender)
     inputs[0] = abi.encode(
       address(0x0000000000000000000000000000000000000001), // MSG_SENDER
       _amountIn,
       _minAmountOut,
-      paths, 
+      paths,
       true
     );
 
     IUniversalRouter router = IUniversalRouter(uniRouter);
-    router.execute(commands, inputs, block.timestamp + 60); 
+    router.execute(commands, inputs, block.timestamp + 60);
 
     uint256 balanceAfter = IERC20(_tokenB).balanceOf(address(this));
     require(balanceAfter > balanceBefore, "swap with uniswap failed");

@@ -33,6 +33,8 @@ export const STABLE_ROUTER_ADDRESS: string =
 
 export const PERMITV2_ADDRESS: string =
   "0x000000000022d473030f116ddee9f6b43ac78ba3";
+export const QUOTER2_ADDRESS: string =
+  "0x78D78E420Da98ad378D7799bE8f4AF69033EB077";
 
 // Uniswap Addresses
 // https://docs.uniswap.org/contracts/v3/reference/deployments
