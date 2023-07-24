@@ -6,9 +6,9 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "./interfaces/IUniversalRouter.sol";
 import "./interfaces/IPermitV2.sol";
+import "./interfaces/IQuoterV2.sol";
 import "./libraries/Commands.sol";
 import "./libraries/SafeERC20.sol";
-import "./interfaces/IQuoterV2.sol";
 
 interface IStableRouter {
   function exchange(
@@ -180,7 +180,6 @@ contract TemplarRouter is Ownable {
     uint256 _amountIn
   )
     external
-    payable
     allowTokenList(_tokenA, _tokenB)
     returns (uint256 _amountOut)
   {
@@ -236,10 +235,10 @@ contract TemplarRouter is Ownable {
     address _tokenB,
     uint256 _amountIn
   ) internal view returns (uint256 _amountOut) {
-    if (_tokenB == tm) {
-      _amountOut = ITreasury(treasury).reserveToTMAmount(_amountIn);
-    } else if (_tokenA == tm) {
+    if (_tokenA == tm) {
       _amountOut = ITreasury(treasury).tmToReserveAmount(_amountIn);
+    } else if (_tokenB == tm) {
+      _amountOut = ITreasury(treasury).reserveToTMAmount(_amountIn);
     } else {
       _amountOut = IStableRouter(stableRouter).get_dy(
         tokenParam[_tokenA],
@@ -255,10 +254,10 @@ contract TemplarRouter is Ownable {
     uint256 _amountIn,
     uint256 _minAmountOut
   ) internal returns (uint256 _amountOut) {
-    if (_tokenB == tm) {
-      _amountOut = _zapMint(_tokenA, _amountIn, _minAmountOut);
-    } else if (_tokenA == tm) {
+    if (_tokenA == tm) {
       _amountOut = _zapRedeem(_tokenB, _amountIn, _minAmountOut);
+    } else if (_tokenB == tm) {
+      _amountOut = _zapMint(_tokenA, _amountIn, _minAmountOut);
     } else {
       _amountOut = _stableSwap(
         _tokenA,
@@ -273,7 +272,7 @@ contract TemplarRouter is Ownable {
     address _token,
     uint256 _amountIn,
     uint256 _minAmountOut
-  ) internal returns (uint256) {
+  ) internal returns (uint256 _amountOut) {
     // swap to BUSD
     uint256 _balance = (_token == busd)
       ? _amountIn
@@ -281,23 +280,22 @@ contract TemplarRouter is Ownable {
 
     // mint
     IERC20(busd).safeApprove(treasury, _balance);
-    return ITreasury(treasury).mint(_balance);
+    _amountOut = ITreasury(treasury).mint(_balance);
   }
 
   function _zapRedeem(
     address _token,
     uint256 _amountIn,
     uint256 _minAmountOut
-  ) internal returns (uint256) {
+  ) internal returns (uint256 _amountOut) {
     // redeem to BUSD
     IERC20(tm).safeApprove(treasury, _amountIn);
     uint256 _balance = ITreasury(treasury).redeem(_amountIn);
 
     // swap from BUSD
-    uint256 _amountOut = (_token == busd)
+    _amountOut = (_token == busd)
       ? _balance
       : _swap(busd, _token, _balance, _minAmountOut);
-    return _amountOut;
   }
 
   function _stableSwap(
@@ -305,8 +303,8 @@ contract TemplarRouter is Ownable {
     address _tokenB,
     uint256 _amountIn,
     uint256 _minAmountOut
-  ) internal returns (uint256) {
-    return _swap(_tokenA, _tokenB, _amountIn, _minAmountOut);
+  ) internal returns (uint256 _amountOut) {
+    _amountOut = _swap(_tokenA, _tokenB, _amountIn, _minAmountOut);
   }
 
   function _swap(
@@ -314,15 +312,14 @@ contract TemplarRouter is Ownable {
     address _tokenB,
     uint256 _amountIn,
     uint256 _minAmountOut
-  ) internal returns (uint256) {
+  ) internal returns (uint256 _amountOut) {
     IERC20(_tokenA).safeApprove(stableRouter, _amountIn);
-    uint256 _balance = IStableRouter(stableRouter).exchange(
+    _amountOut = IStableRouter(stableRouter).exchange(
       tokenParam[_tokenA],
       tokenParam[_tokenB],
       _amountIn,
       _minAmountOut
     );
-    return _balance;
   }
 
   function _swapWithUniswapV3(
@@ -375,7 +372,6 @@ contract TemplarRouter is Ownable {
     router.execute(commands, inputs, block.timestamp + 60);
 
     uint256 balanceAfter = IERC20(_tokenB).balanceOf(address(this));
-    require(balanceAfter > balanceBefore, "swap with uniswap failed");
     _amountOut = balanceAfter - balanceBefore;
   }
 
