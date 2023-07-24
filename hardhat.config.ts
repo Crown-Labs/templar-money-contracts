@@ -67,29 +67,13 @@ module.exports = {
         url: "https://bsc-dataseed2.binance.org",
       },
     },
-    // ropsten: {
-    //   url: process.env.ROPSTEN_URL || "",
-    //   accounts: [`0x${PRIVATE_KEY}`],
-    // },
-    // bsc_testnet: {
-    //   url: "https://data-seed-prebsc-1-s1.binance.org:8545",
-    //   chainId: 97,
-    //   gas: 2100000,
-    //   gasPrice: 10000000000,
-    //   accounts: [`0x${PRIVATE_KEY}`],
-    // },
-    /*mainnet: {
-      url: "https://bsc-dataseed.binance.org/",
+    bsc: {
+      url: "https://bsc-dataseed2.binance.org",
       chainId: 56,
-      gasPrice: 20000000000,
-      accounts: {mnemonic: mnemonic}
-    }*/
+      gasPrice: 3000000000,
+    },
   },
-  // gasReporter: {
-  //   enabled: process.env.REPORT_GAS !== undefined,
-  //   currency: "USD",
-  // },
-  // etherscan: {
-  //   apiKey: process.env.ETHERSCAN_API_KEY,
-  // },
+  etherscan: {
+    apiKey: process.env.ETHERSCAN_API_KEY
+  }, 
 };
