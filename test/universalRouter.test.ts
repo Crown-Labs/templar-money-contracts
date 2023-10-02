@@ -20,6 +20,11 @@ import {
   BHOT_ADDRESS,
   PERMITV2_ADDRESS,
   QUOTER2_ADDRESS,
+  MULTISIG_OWNER_ADDRESS,
+  DEPLOYER_ADDRESS,
+  RESERVE_FUND_ADDRESS,
+  RESERVE_ORACLE_ADDRESS,
+  TREAUSRY_INTEREST,
 } from "./shared/constant";
 import { parseEvents, EVENT } from "./shared/parseEvents";
 
@@ -32,9 +37,12 @@ import { BigNumber } from "ethers";
 import { calculateMinimumOutput } from "./shared";
 
 describe("Templar Router", () => {
+  let multisig: SignerWithAddress;
+  let deployer: SignerWithAddress;
   let foo: SignerWithAddress;
   let bar: SignerWithAddress;
   let bhot: SignerWithAddress;
+  let treasuryPrevious: Treasury;
   let treasury: Treasury;
   let templarRouter: TemplarRouter;
   let tmContract: Erc20;
@@ -45,10 +53,12 @@ describe("Templar Router", () => {
   let usdcContract: Erc20;
   let quoterV2: any;
 
-  beforeEach(async () => {
-    foo = await ethers.getSigner(FOO_ADDRESS);
-    bar = await ethers.getSigner(BAR_ADDRESS);
-    bhot = await ethers.getSigner(BHOT_ADDRESS);
+  before(async () => {
+    multisig = await impersonateAddress(MULTISIG_OWNER_ADDRESS);
+    deployer = await impersonateAddress(DEPLOYER_ADDRESS);
+    foo = await impersonateAddress(FOO_ADDRESS);
+    bar = await impersonateAddress(BAR_ADDRESS);
+    bhot = await impersonateAddress(BHOT_ADDRESS);
 
     temContract = new ethers.Contract(
       TEM_ADDRESS,
@@ -92,30 +102,53 @@ describe("Templar Router", () => {
       foo
     ) as Erc20;
 
-    await network.provider.request({
-      method: "hardhat_impersonateAccount",
-      params: [FOO_ADDRESS],
-    });
-
-    await network.provider.request({
-      method: "hardhat_impersonateAccount",
-      params: [BAR_ADDRESS],
-    });
-    await network.provider.request({
-      method: "hardhat_impersonateAccount",
-      params: [BHOT_ADDRESS],
-    });
-
+    // Migrate new Treasury
     const Treasury = await ethers.getContractFactory("Treasury");
-    treasury = Treasury.attach(TREASURY_ADDRESS) as Treasury;
+    treasuryPrevious = Treasury.attach(TREASURY_ADDRESS) as Treasury;
 
-    // await treasury.connect(bar).setMintPause(false);
+    const interestPerBlockPrevious = await treasuryPrevious.interestPerBlock();
+    await treasuryPrevious.connect(multisig).setInterest(0);
+    const treasuryBalancePrevious = await treasuryPrevious.treasuryBalance();
+    const tmPricePrevious = await treasuryPrevious.tmPrice();
+    const initialBalance = await treasuryPrevious.treasuryBalance();
+    const worker = await treasuryPrevious.worker();
 
+    // constructor(address _tm,  address _reserveToken,  address _reserveFund, address _reserveOracle, uint256 _initialBalance)
+    treasury = (await Treasury.connect(deployer).deploy(TM_ADDRESS, USDT_ADDRESS, RESERVE_FUND_ADDRESS, RESERVE_ORACLE_ADDRESS, initialBalance)) as Treasury;
+    await treasury.setInterest(TREAUSRY_INTEREST);
+
+    const treasuryBalance = await treasury.treasuryBalance();
+    const tmPrice = await treasuryPrevious.tmPrice();
+    const interestPerBlock = await treasury.interestPerBlock();
+
+    // expect initial balance to be the same
+    expect(treasuryBalancePrevious).to.be.equal(treasuryBalance);
+    expect(tmPricePrevious).to.be.equal(tmPrice);
+    expect(interestPerBlockPrevious).to.be.equal(interestPerBlock);
+
+    await treasury.setWorker(worker);
+    await treasury.transferOwnership(multisig.address);
+
+    const TemplayMoney = await ethers.getContractFactory("TemplarMoney");
+    const tm = TemplayMoney.attach(TM_ADDRESS) as TemplarMoney;
+    await tm.connect(multisig).setTreasury(treasury.address);
+
+    const ReserveFund = await ethers.getContractFactory("ReserveFund");
+    const reserveFund = ReserveFund.attach(RESERVE_FUND_ADDRESS) as Treasury;
+    await reserveFund.connect(multisig).removePool(treasuryPrevious.address);
+    await reserveFund.connect(multisig).addPool(treasury.address, usdtContract.address);
+
+    const busdBalance: BigNumber = await busdContract.balanceOf(reserveFund.address);
+    await usdtContract.connect(bhot).transfer(reserveFund.address, busdBalance);
+  });
+
+  beforeEach(async () => {
+    // Deploy Router
     const router = await ethers.getContractFactory("TemplarRouter");
     templarRouter = (await router
       .connect(foo)
       .deploy(
-        TREASURY_ADDRESS,
+        treasury.address,
         TM_ADDRESS,
         BUSD_ADDRESS,
         USDT_ADDRESS,
@@ -150,6 +183,11 @@ describe("Templar Router", () => {
     await daiContract
       .connect(bhot)
       ["transfer(address,uint256)"](foo.address, parseEther("1000"));
+
+    // Transfer USDT token
+    await usdtContract
+      .connect(bhot)
+      ["transfer(address,uint256)"](foo.address, parseEther("1000"));
   });
 
   describe("TemplarRouter getAmountOut", () => {
@@ -178,7 +216,6 @@ describe("Templar Router", () => {
         .callStatic["getAmountOut(address,address,uint256)"](
           TEM_ADDRESS,
           TM_ADDRESS,
-
           amountIn
         );
       let amountOut1 = await templarRouter.callStatic.swap(
@@ -208,17 +245,17 @@ describe("Templar Router", () => {
       expect(amountOut).to.be.equal(amountOut1);
     });
 
-    it("BUSD --> TM", async () => {
+    it("USDT --> TM", async () => {
       const amountIn = parseEther("1");
       const amountOut = await templarRouter
         .connect(bhot)
         .callStatic["getAmountOut(address,address,uint256)"](
-          BUSD_ADDRESS,
+          USDT_ADDRESS,
           TM_ADDRESS,
           amountIn
         );
       let amountOut1 = await templarRouter.callStatic.swap(
-        BUSD_ADDRESS,
+        USDT_ADDRESS,
         TM_ADDRESS,
         amountIn,
         0
@@ -354,7 +391,7 @@ describe("Templar Router", () => {
 
     it("completes a trade for TEM --> BUSD", async function () {
       const amountIn = parseUnits("10", 9);
-      const amountOutMin = parseEther("14");
+      const amountOutMin = parseEther("13");
       const {
         busdBalanceAfter,
         busdBalanceBefore,
@@ -660,4 +697,14 @@ describe("Templar Router", () => {
       gasSpent,
     };
   }
+  async function impersonateAddress(address: string) {
+    const hre = require('hardhat');
+    await hre.network.provider.request({
+      method: 'hardhat_impersonateAccount',
+      params: [address],
+    });
+    
+    const signer = await ethers.getSigner(address);
+    return signer;
+  };
 });

@@ -47,7 +47,7 @@ contract TemplarRouter is Ownable {
 
   address public immutable treasury;
   address public immutable tm;
-  address public immutable busd;
+  address public immutable usdt;
   address public immutable wbnb;
   address public immutable tem;
   address public immutable stableRouter;
@@ -107,7 +107,7 @@ contract TemplarRouter is Ownable {
 
     treasury = _treasury;
     tm = _tm;
-    busd = _busd;
+    usdt = _usdt;
     wbnb = _wbnb;
     tem = _tem;
     stableRouter = _stableRouter;
@@ -147,16 +147,16 @@ contract TemplarRouter is Ownable {
     );
 
     if (_tokenA == tem) {
-      _amountOut = _swapWithUniswapV3(_amountIn, 0, tem, busd);
-      if (_tokenB != busd) {
-        _amountOut = _swapStableTM(busd, _tokenB, _amountOut, 0);
+      _amountOut = _swapWithUniswapV3(_amountIn, 0, tem, usdt);
+      if (_tokenB != usdt) {
+        _amountOut = _swapStableTM(usdt, _tokenB, _amountOut, 0);
       }
     } else if (_tokenB == tem) {
       uint256 amountIn = _amountIn;
-      if (_tokenA != busd) {
-        amountIn = _swapStableTM(_tokenA, busd, amountIn, 0);
+      if (_tokenA != usdt) {
+        amountIn = _swapStableTM(_tokenA, usdt, amountIn, 0);
       }
-      _amountOut = _swapWithUniswapV3(amountIn, 0, busd, tem);
+      _amountOut = _swapWithUniswapV3(amountIn, 0, usdt, tem);
     } else {
       _amountOut = _swapStableTM(_tokenA, _tokenB, _amountIn, 0);
     }
@@ -184,24 +184,24 @@ contract TemplarRouter is Ownable {
     returns (uint256 _amountOut)
   {
     if (_tokenA == tem) {
-      _amountOut = _getQuoteExactInput(tem, busd, _amountIn);
-      if (_tokenB != busd) {
+      _amountOut = _getQuoteExactInput(tem, usdt, _amountIn);
+      if (_tokenB != usdt) {
         _amountOut = _getExactInputSwapStableTM(
-          busd,
+          usdt,
           _tokenB,
           _amountOut
         );
       }
     } else if (_tokenB == tem) {
       uint256 amountIn = _amountIn;
-      if (_tokenA != busd) {
+      if (_tokenA != usdt) {
         amountIn = _getExactInputSwapStableTM(
           _tokenA,
-          busd,
+          usdt,
           amountIn
         );
       }
-      _amountOut = _getQuoteExactInput(busd, tem, amountIn);
+      _amountOut = _getQuoteExactInput(usdt, tem, amountIn);
     } else {
       _amountOut = _getExactInputSwapStableTM(
         _tokenA,
@@ -219,11 +219,12 @@ contract TemplarRouter is Ownable {
     address _tokenB,
     uint256 _amountIn
   ) internal returns (uint256 amountOut) {
+    (uint24 fee1, uint24 fee2) = _tokenA == usdt ? (500, 3000) : (3000, 500);
     bytes memory paths = abi.encodePacked(
       _tokenA,
-      uint24(3000),
+      fee1,
       wbnb,
-      uint24(3000),
+      fee2,
       _tokenB
     );
     IQuoterV2 q = IQuoterV2(quoter2);
@@ -273,13 +274,13 @@ contract TemplarRouter is Ownable {
     uint256 _amountIn,
     uint256 _minAmountOut
   ) internal returns (uint256 _amountOut) {
-    // swap to BUSD
-    uint256 _balance = (_token == busd)
+    // swap to USDT
+    uint256 _balance = (_token == usdt)
       ? _amountIn
-      : _swap(_token, busd, _amountIn, _minAmountOut);
+      : _swap(_token, usdt, _amountIn, _minAmountOut);
 
     // mint
-    IERC20(busd).safeApprove(treasury, _balance);
+    IERC20(usdt).safeApprove(treasury, _balance);
     _amountOut = ITreasury(treasury).mint(_balance);
   }
 
@@ -288,14 +289,14 @@ contract TemplarRouter is Ownable {
     uint256 _amountIn,
     uint256 _minAmountOut
   ) internal returns (uint256 _amountOut) {
-    // redeem to BUSD
+    // redeem to USDT
     IERC20(tm).safeApprove(treasury, _amountIn);
     uint256 _balance = ITreasury(treasury).redeem(_amountIn);
 
-    // swap from BUSD
-    _amountOut = (_token == busd)
+    // swap from USDT
+    _amountOut = (_token == usdt)
       ? _balance
-      : _swap(busd, _token, _balance, _minAmountOut);
+      : _swap(usdt, _token, _balance, _minAmountOut);
   }
 
   function _stableSwap(
@@ -348,13 +349,14 @@ contract TemplarRouter is Ownable {
     bytes[] memory inputs = new bytes[](1);
 
     // Just only paths supported
-    // BUSD -> WBNB -> TEM
-    // TEM -> WBNB -> BUSD
+    // USDT -> WBNB -> TEM
+    // TEM -> WBNB -> USDT
+    (uint24 fee1, uint24 fee2) = _tokenA == usdt ? (500, 3000) : (3000, 500);
     bytes memory paths = abi.encodePacked(
       _tokenA,
-      uint24(3000),
+      fee1,
       wbnb,
-      uint24(3000),
+      fee2,
       _tokenB
     );
 
