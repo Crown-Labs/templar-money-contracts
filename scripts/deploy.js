@@ -27,7 +27,7 @@ async function main() {
     const treasuryBalancePrevious = await treasuryPrevious.treasuryBalance();
 
     // deploy TemplarRouter
-    const treasury = await deployContract("Treasury", [
+    treasury = await deployContract("Treasury", [
       tm.address,
       usdt.address,
       reserveFund.address,

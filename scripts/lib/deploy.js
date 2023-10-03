@@ -9,7 +9,7 @@ const contactAddress = {
   treasury: deployedAddress["Treasury"], 
   managerFund: deployedAddress["ManagerFund"],
   reserveFund: "0xEbe9da74D7d5dc5203776264E7610aE76D7c9f93",
-  reserveOracle: "0xcBb98864Ef56E9042e7d2efef76141f15731B82f",
+  reserveOracle: "0xB97Ad0E74fa7d920791E90258A6E2085088b4320",
   tm: deployedAddress["TM"],
   busd: "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56",
   usdt: "0x55d398326f99059fF775485246999027B3197955",
