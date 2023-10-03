@@ -35,6 +35,17 @@ export const PERMITV2_ADDRESS: string =
   "0x000000000022d473030f116ddee9f6b43ac78ba3";
 export const QUOTER2_ADDRESS: string =
   "0x78D78E420Da98ad378D7799bE8f4AF69033EB077";
-
 // Uniswap Addresses
 // https://docs.uniswap.org/contracts/v3/reference/deployments
+
+// Migrate Treasury
+export const MULTISIG_OWNER_ADDRESS: string = 
+  "0xEA724deA000b5e5206d28f4BC2dAD5f2FA1fe788";
+  export const DEPLOYER_ADDRESS: string = 
+  "0x8e762609CEa5Ddd3234B9d41Cf8D0d8b4f2581a6";
+export const RESERVE_FUND_ADDRESS: string =
+  "0xEbe9da74D7d5dc5203776264E7610aE76D7c9f93";
+export const RESERVE_ORACLE_ADDRESS: string =
+  "0xcBb98864Ef56E9042e7d2efef76141f15731B82f";
+export const TREAUSRY_INTEREST = 5000;
+
